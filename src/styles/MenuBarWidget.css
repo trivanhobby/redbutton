@@ -1,0 +1,115 @@
+.widget-page {
+  background-color: transparent !important;
+  min-height: auto !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+.menu-widget-container {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+  margin: 0 auto;
+  animation: slide-in 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  backdrop-filter: blur(10px);
+  transform-origin: top center;
+  width: auto;
+  max-width: 400px;
+}
+
+.menu-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: 8px;
+}
+
+.menu-button:hover {
+  transform: translateY(-1px);
+}
+
+.menu-button-red {
+  background-color: rgba(239, 68, 68, 0.2);
+  color: white;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.menu-button-red:hover {
+  background-color: rgba(239, 68, 68, 0.3);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.menu-button-green {
+  background-color: rgba(34, 197, 94, 0.2);
+  color: white;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.menu-button-green:hover {
+  background-color: rgba(34, 197, 94, 0.3);
+  border-color: rgba(34, 197, 94, 0.5);
+}
+
+.widget-icon {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 2px;
+}
+
+.widget-icon-half {
+  width: 10px;
+  height: 20px;
+}
+
+.widget-icon-red {
+  background-color: #EF4444;
+  border-top-left-radius: 5px;
+  border-bottom-left-radius: 5px;
+}
+
+.widget-icon-green {
+  background-color: #22C55E;
+  border-top-right-radius: 5px;
+  border-bottom-right-radius: 5px;
+}
+
+.time-picker {
+  padding: 10px;
+  background-color: rgba(17, 24, 39, 0.5);
+  border-radius: 8px;
+  border: 1px solid rgba(75, 85, 99, 0.3);
+}
+
+/* Custom scrollbar for the widget */
+.menu-widget-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.menu-widget-container::-webkit-scrollbar-track {
+  background: rgba(17, 24, 39, 0.5);
+  border-radius: 10px;
+}
+
+.menu-widget-container::-webkit-scrollbar-thumb {
+  background: rgba(75, 85, 99, 0.5);
+  border-radius: 10px;
+}
+
+.menu-widget-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.7);
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateY(-15px) scale(0.98);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+} 
