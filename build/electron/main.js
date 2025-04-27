@@ -196,6 +196,7 @@ function createMenuBarWidget() {
         var width = _a.width, height = _a.height;
         if (emotionWindow) {
             emotionWindow.setSize(width, height);
+            console.log("RESIZED WINDOW", width, height);
             // Adjust position after resize if needed
             if (emotionWindow.isVisible()) {
                 var bounds = tray === null || tray === void 0 ? void 0 : tray.getBounds();

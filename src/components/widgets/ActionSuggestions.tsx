@@ -6,7 +6,6 @@ interface ActionSuggestionsProps {
   loading: boolean;
   selectedSuggestion: string | null;
   onSelect: (suggestion: string) => void;
-  onComplete: () => void;
 }
 
 const ActionSuggestions: React.FC<ActionSuggestionsProps> = ({
@@ -14,7 +13,6 @@ const ActionSuggestions: React.FC<ActionSuggestionsProps> = ({
   loading,
   selectedSuggestion,
   onSelect,
-  onComplete,
 }) => {
   return (
     <div>
@@ -41,22 +39,6 @@ const ActionSuggestions: React.FC<ActionSuggestionsProps> = ({
               {suggestion}
             </motion.button>
           ))}
-          
-          {selectedSuggestion && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="flex justify-end mt-4"
-            >
-              <button
-                className="px-6 py-2 bg-primary text-white rounded-md hover:bg-opacity-90 transition-all"
-                onClick={onComplete}
-              >
-                I'll do this
-              </button>
-            </motion.div>
-          )}
         </div>
       ) : (
         <p className="text-gray-400 italic text-center py-4">No suggestions available.</p>

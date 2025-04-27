@@ -10,45 +10,34 @@ const MainLayout: React.FC = () => {
   const { addJournalEntry } = useData();
   
   const isActive = (path: string) => {
-    return location.pathname === path ? 'border-b-2 border-primary' : '';
+    return location.pathname === path || (location.pathname === '/' && path === '/calendar') 
+      ? 'border-b-2 border-primary text-white font-medium' 
+      : 'text-gray-400 hover:text-gray-200';
   };
 
   // Handle journal request from ButtonWidget
-  const handleJournalRequest = (emotionId: string, text: string) => {
-    // Navigate to journal page
-    navigate('/journal');
-    
-    // Create a new journal entry with the emotion
-    const today = format(new Date(), 'yyyy-MM-dd');
-    addJournalEntry({
-      date: today,
-      content: `I'm feeling ${text}`,
-      emotions: [emotionId],
-      actions: [],
-    });
-  };
 
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="bg-surface shadow-md">
+      <header className="bg-gray-900 border-b border-gray-800 shadow-md">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <Link to="/" className="text-2xl font-bold text-primary flex items-center gap-2">
+          <Link to="/" className="text-2xl font-bold flex items-center gap-2">
             <span className="text-redbutton">Red</span>
             <span className="text-greenbutton">Button</span>
           </Link>
           
-          <nav className="hidden md:flex space-x-6">
-            <Link to="/journal" className={`py-2 px-1 ${isActive('/journal')}`}>
+          <nav className="hidden md:flex space-x-8">
+            <Link to="/journal" className={`py-2 px-1 transition-colors ${isActive('/journal')}`}>
               Journal
             </Link>
-            <Link to="/calendar" className={`py-2 px-1 ${isActive('/calendar')}`}>
+            <Link to="/calendar" className={`py-2 px-1 transition-colors ${isActive('/calendar')}`}>
               Calendar & Stats
             </Link>
-            <Link to="/goals" className={`py-2 px-1 ${isActive('/goals')}`}>
+            <Link to="/goals" className={`py-2 px-1 transition-colors ${isActive('/goals')}`}>
               Goals
             </Link>
-            <Link to="/settings" className={`py-2 px-1 ${isActive('/settings')}`}>
+            <Link to="/settings" className={`py-2 px-1 transition-colors ${isActive('/settings')}`}>
               Settings
             </Link>
           </nav>
@@ -56,7 +45,7 @@ const MainLayout: React.FC = () => {
           {/* Mobile menu button */}
           <div className="md:hidden">
             {/* This would be a hamburger menu in a full implementation */}
-            <span>≡</span>
+            <span className="text-gray-300 text-2xl">≡</span>
           </div>
         </div>
       </header>
@@ -75,7 +64,7 @@ const MainLayout: React.FC = () => {
       </main>
       
       {/* Footer */}
-      <footer className="bg-surface mt-auto py-4 text-center text-sm text-gray-500">
+      <footer className="bg-gray-900 border-t border-gray-800 mt-auto py-4 text-center text-sm text-gray-500">
         <div className="container mx-auto">
           RedButton &copy; {new Date().getFullYear()} - Mindful Productivity Assistant
         </div>

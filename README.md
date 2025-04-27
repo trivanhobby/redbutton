@@ -18,6 +18,8 @@ A minimalist assistant application designed to help users consciously react to t
 - **Journal**: Keep track of your emotional states and reflections
   - Daily journal entries tied to your emotions and actions
   - Review past entries to track patterns
+  - AI-assisted journaling with templates and polishing
+  - Auto-save as you type
 
 - **Calendar & Stats**: Visualize your emotional patterns
   - Calendar view with color-coded emotional states
@@ -31,6 +33,23 @@ A minimalist assistant application designed to help users consciously react to t
   - Add custom emotions with emojis
   - Enable/disable AI suggestions
   - Set your OpenAI API key for personalized suggestions
+
+## AI-Powered Journaling
+
+RedButton comes with two AI-powered features to enhance your journaling experience:
+
+1. **Propose**: Generates a personalized journal template with guided prompts based on:
+   - Your recorded emotions for the day
+   - Previous journal entries for context
+   - Customized questions to help you reflect meaningfully
+
+2. **Polish**: Helps improve your journal entries by:
+   - Enhancing readability and flow
+   - Fixing grammar and spelling
+   - Maintaining your unique voice and insights
+   - Preserving all your personal thoughts and feelings
+
+These features are designed to make journaling more accessible and rewarding, especially when you're not sure where to start or want to improve your writing.
 
 ## Getting Started
 
@@ -53,15 +72,44 @@ A minimalist assistant application designed to help users consciously react to t
    npm install
    ```
 
-3. Start the development server:
+3. Set up environment variables (optional):
+   - Copy `.env.example` to `.env.local`
+   - Add your OpenAI API key:
+     ```
+     REACT_APP_OPENAI_API_KEY=your_api_key_here
+     ```
+   - The application will automatically use this API key if you haven't set one in the Settings page
+
+4. Start the development server:
    ```
    npm run electron:dev
    ```
 
-4. To build the application:
+5. To build the application:
    ```
    npm run electron:build
    ```
+
+## Setting Up the OpenAI API Key
+
+You have three options for setting up your OpenAI API key:
+
+1. **Using Environment Variables (recommended for development)**:
+   - Create a `.env.local` file in the project root
+   - Add your API key: `REACT_APP_OPENAI_API_KEY=your_api_key_here`
+   - This method keeps your key out of the code and git history
+
+2. **Through the Settings Page**:
+   - Navigate to the Settings page in the app
+   - Enable AI Assistant if it's not already enabled
+   - Paste your OpenAI API key in the input field and click Save
+   - Your key will be stored securely in the browser's local storage
+
+3. **During Build Time (for production)**:
+   - Add the environment variable to your build environment
+   - This method is suitable for CI/CD pipelines
+
+Note: For security, API keys are never sent to any server and are only stored locally on your device.
 
 ## Technology Stack
 
@@ -74,16 +122,6 @@ A minimalist assistant application designed to help users consciously react to t
 - **Data Storage**: Local storage (JSON)
 - **Animations**: Framer Motion
 - **Charting**: Chart.js
-
-## Project Structure
-
-- `/src`: Main source code directory
-  - `/components`: React components
-  - `/context`: State management
-  - `/pages`: Application pages
-  - `/utils`: Utility functions
-- `/electron`: Electron-specific code
-- `/public`: Static assets
 
 ## Acknowledgments
 

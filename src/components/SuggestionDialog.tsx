@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { useData, Emotion } from '../context/DataContext';
+import { useData, Emotion, EmotionRecord, JournalEntry } from '../context/DataContext';
 import { generateSuggestions } from '../utils/ai';
 import ActionSuggestions from './widgets/ActionSuggestions';
 import { format } from 'date-fns';
@@ -18,7 +18,7 @@ interface EmotionData {
 
 const SuggestionDialog: React.FC = () => {
   const navigate = useNavigate();
-  const { data, addJournalEntry } = useData();
+  const { data, addEmotionToJournal, updateJournalEntry } = useData();
   
   // State for emotion data received from the menu bar
   const [emotionData, setEmotionData] = useState<EmotionData | null>(null);
@@ -28,15 +28,35 @@ const SuggestionDialog: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<string | null>(null);
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
+  const [journalEntryId, setJournalEntryId] = useState<string | null>(null);
+  const [initialEmotionTimestamp, setInitialEmotionTimestamp] = useState<string | null>(null);
 
   // Listen for emotion-selected events from the menu bar
   useEffect(() => {
-    console.log('SuggestionDialog mounted, listening for emotion-selected events');
     
     const handleEmotionSelected = (data: EmotionData) => {
       console.log('Emotion selected:', data);
       setEmotionData(data);
       setShowSuggestions(true);
+      
+      // Record the emotion selection in the journal right away
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const timestamp = new Date().toISOString();
+      setInitialEmotionTimestamp(timestamp);
+      
+      const emotionRecord: EmotionRecord = {
+        emotionId: data.id,
+        timestamp: timestamp,
+        timeInMinutes: data.time || 10, // Default to 10 minutes if not specified
+        action: data.action // Make sure action is included
+      };
+      
+      console.log('Recording emotion with action:', emotionRecord.action, 'and time:', emotionRecord.timeInMinutes);
+      
+      const entryId = addEmotionToJournal(today, emotionRecord);
+      setJournalEntryId(entryId);
+      
+      // Then load suggestions
       loadSuggestions(data);
     };
 
@@ -49,7 +69,7 @@ const SuggestionDialog: React.FC = () => {
         cleanup();
       }
     };
-  }, []);
+  }, [addEmotionToJournal]);
 
   // Load suggestions when an emotion is selected
   const loadSuggestions = async (emotionData: EmotionData) => {
@@ -96,13 +116,19 @@ const SuggestionDialog: React.FC = () => {
   // Handle selecting a suggestion
   const handleSuggestionSelect = (suggestion: string) => {
     setSelectedSuggestion(suggestion === selectedSuggestion ? null : suggestion);
-  };
-
-  // Handle completing a suggestion
-  const handleSuggestionComplete = () => {
-    // Here you could log the completed suggestion
-    // For now, just close the dialog
-    handleCloseDialog();
+    console.log("handle", selectedSuggestion, journalEntryId, emotionData, initialEmotionTimestamp)
+    if (suggestion && journalEntryId && emotionData && initialEmotionTimestamp) {
+      // Find the current journal entry
+      var record = data.journalEntries.find(entry => entry.id === journalEntryId)
+      if (record) {
+        var emotion = record.emotionRecords[record.emotionRecords.length - 1]
+        if (emotion) {
+          emotion.suggestionSelected = suggestion
+          updateJournalEntry(journalEntryId, record.content);
+          console.log(record)
+        }
+      }
+    }
   };
 
   // Handle the "I want more" button click
@@ -122,29 +148,13 @@ const SuggestionDialog: React.FC = () => {
     handleCloseDialog();
   };
 
-  // Handle the "I want to journal" button click
-  const handleJournal = () => {
-    if (emotionData) {
-      // Navigate to journal page
-      navigate('/journal');
-      
-      // Create a new journal entry with the emotion
-      const today = format(new Date(), 'yyyy-MM-dd');
-      addJournalEntry({
-        date: today,
-        content: `I'm feeling ${emotionData.name}`,
-        emotions: [emotionData.id],
-        actions: [],
-      });
-    }
-    handleCloseDialog();
-  };
-
   // Close the dialog
   const handleCloseDialog = () => {
     setShowSuggestions(false);
     setSelectedSuggestion(null);
     setEmotionData(null);
+    setJournalEntryId(null);
+    setInitialEmotionTimestamp(null);
   };
 
   if (!showSuggestions) {
@@ -186,7 +196,6 @@ const SuggestionDialog: React.FC = () => {
             loading={isLoading}
             selectedSuggestion={selectedSuggestion}
             onSelect={handleSuggestionSelect}
-            onComplete={handleSuggestionComplete}
           />
         </div>
         
@@ -201,18 +210,29 @@ const SuggestionDialog: React.FC = () => {
             onClick={handleOpenApp}
             className="py-2.5 px-4 bg-primary text-white rounded-md hover:bg-opacity-90 transition-colors"
           >
-            Open App
-          </button>
-          <button
-            onClick={handleJournal}
-            className="py-2.5 px-4 col-span-2 bg-green-600 hover:bg-green-700 text-white rounded-md transition-colors"
-          >
-            I want to journal
+            {selectedSuggestion ? "Let's do!" : "Thank you"}
           </button>
         </div>
       </motion.div>
     </motion.div>
   );
+};
+
+// To update entire journal entry including emotion records
+const setData = (updater: (prev: any) => any) => {
+  // Get localStorage data
+  const savedData = localStorage.getItem('redButtonData');
+  if (savedData) {
+    try {
+      const parsedData = JSON.parse(savedData);
+      const newData = updater(parsedData);
+      localStorage.setItem('redButtonData', JSON.stringify(newData));
+      // Force a refresh of the application state
+      window.dispatchEvent(new Event('storage'));
+    } catch (e: unknown) {
+      console.error('Failed to update data', e);
+    }
+  }
 };
 
 export default SuggestionDialog; 

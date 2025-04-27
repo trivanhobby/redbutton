@@ -9,6 +9,15 @@ export interface Emotion {
   isPositive: boolean;
 }
 
+// Record of emotions with timestamps
+export interface EmotionRecord {
+  emotionId: string;
+  timestamp: string;
+  action?: string;  // For positive emotions: 'celebrate', 'journal', 'plan'
+  timeInMinutes?: number;
+  suggestionSelected?: string; // Track which suggestion was selected
+}
+
 export interface Action {
   id: string;
   text: string;
@@ -21,7 +30,7 @@ export interface JournalEntry {
   id: string;
   date: string;
   content: string;
-  emotions: string[]; // IDs of emotions
+  emotionRecords: EmotionRecord[]; // Replace emotions array with emotionRecords
   actions: string[]; // IDs of actions
 }
 
@@ -47,6 +56,7 @@ export interface AppData {
     customEmotions: boolean;
     theme: 'light' | 'dark';
     aiEnabled: boolean;
+    apiKey?: string; // Added to store the API key securely
   };
 }
 
@@ -100,6 +110,7 @@ const initialData: AppData = {
     customEmotions: false,
     theme: 'light',
     aiEnabled: true,
+    apiKey: '', // Initialize with empty string
   },
 };
 
@@ -113,6 +124,8 @@ interface DataContextType {
   removeAction: (id: string) => void;
   addJournalEntry: (entry: Omit<JournalEntry, 'id'>) => void;
   updateJournalEntry: (id: string, content: string) => void;
+  addEmotionToJournal: (date: string, emotionRecord: EmotionRecord) => string; // Returns the entry ID
+  removeEmotionFromJournal: (entryId: string, timestamp: string) => void; // Remove emotion record by timestamp
   addGoal: (text: string) => void;
   toggleGoal: (id: string) => void;
   removeGoal: (id: string) => void;
@@ -132,7 +145,39 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const savedData = localStorage.getItem('redButtonData');
     if (savedData) {
       try {
-        return JSON.parse(savedData);
+        const parsedData = JSON.parse(savedData);
+        
+        // Check if we need to migrate data structure
+        const needsMigration = parsedData.journalEntries && 
+                              parsedData.journalEntries.length > 0 && 
+                              parsedData.journalEntries[0].emotions !== undefined &&
+                              parsedData.journalEntries[0].emotionRecords === undefined;
+        
+        if (needsMigration) {
+          console.log('Migrating data structure from emotions array to emotionRecords');
+          // Migrate journal entries to use emotionRecords instead of emotions
+          const migratedEntries = parsedData.journalEntries.map((entry: any) => {
+            if (entry.emotions && !entry.emotionRecords) {
+              // Convert emotions array to emotionRecords array
+              const emotionRecords = entry.emotions.map((emotionId: string) => ({
+                emotionId,
+                timestamp: entry.date + 'T12:00:00.000Z', // Default to noon on the entry date
+                timeInMinutes: 10 // Default to 10 minutes
+              }));
+              
+              return {
+                ...entry,
+                emotionRecords,
+                // Keep emotions array for backwards compatibility
+              };
+            }
+            return entry;
+          });
+          
+          parsedData.journalEntries = migratedEntries;
+        }
+        
+        return parsedData;
       } catch (e) {
         console.error('Failed to parse saved data', e);
         return initialData;
@@ -198,6 +243,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const newEntry: JournalEntry = {
       ...entry,
       id: `j${Date.now()}`,
+      emotionRecords: entry.emotionRecords || []
     };
     setData((prev) => ({
       ...prev,
@@ -206,12 +252,78 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const updateJournalEntry = (id: string, content: string) => {
+    console.log("update with new ", content)
     setData((prev) => ({
       ...prev,
       journalEntries: prev.journalEntries.map((j) =>
         j.id === id ? { ...j, content } : j
       ),
     }));
+  };
+
+  const addEmotionToJournal = (date: string, emotionRecord: EmotionRecord): string => {
+    // Log for debugging
+    console.log('Adding emotion to journal:', {
+      date,
+      emotionId: emotionRecord.emotionId, 
+      action: emotionRecord.action,
+      timeInMinutes: emotionRecord.timeInMinutes
+    });
+    
+    // Find if an entry for this date already exists
+    const existingEntry = data.journalEntries.find(entry => entry.date === date);
+    
+    if (existingEntry) {
+      // Update existing entry
+      setData((prev) => ({
+        ...prev,
+        journalEntries: prev.journalEntries.map((entry) =>
+          entry.id === existingEntry.id
+            ? {
+                ...entry,
+                emotionRecords: [...entry.emotionRecords, emotionRecord]
+              }
+            : entry
+        ),
+      }));
+      return existingEntry.id;
+    } else {
+      // Create new entry
+      const newEntry: JournalEntry = {
+        id: `j${Date.now()}`,
+        date,
+        content: '',
+        emotionRecords: [emotionRecord],
+        actions: []
+      };
+      
+      setData((prev) => ({
+        ...prev,
+        journalEntries: [...prev.journalEntries, newEntry]
+      }));
+      
+      return newEntry.id;
+    }
+  };
+
+  const removeEmotionFromJournal = (entryId: string, timestamp: string) => {
+    setData((prev) => {
+      const updatedJournalEntries = prev.journalEntries.map(entry => {
+        if (entry.id === entryId) {
+          // Filter out the emotion record with the matching timestamp
+          return {
+            ...entry,
+            emotionRecords: entry.emotionRecords.filter(record => record.timestamp !== timestamp)
+          };
+        }
+        return entry;
+      });
+
+      return {
+        ...prev,
+        journalEntries: updatedJournalEntries
+      };
+    });
   };
 
   const addGoal = (text: string) => {
@@ -284,6 +396,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     removeAction,
     addJournalEntry,
     updateJournalEntry,
+    addEmotionToJournal,
+    removeEmotionFromJournal,
     addGoal,
     toggleGoal,
     removeGoal,
