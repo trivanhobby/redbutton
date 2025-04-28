@@ -89,7 +89,7 @@ const SuggestionDialog: React.FC = () => {
         const generatedSuggestions = await generateSuggestions(
           emotion,
           emotionData.time || 10,
-          data.goals,
+          data,
           recentEntries
         );
         

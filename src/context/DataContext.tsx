@@ -34,10 +34,31 @@ export interface JournalEntry {
   actions: string[]; // IDs of actions
 }
 
-export interface Goal {
+// New interface for check-ins (notes associated with goals or initiatives)
+export interface CheckIn {
+  id: string;
+  content: string;
+  timestamp: string;
+  entityId: string; // ID of the goal or initiative this check-in is associated with
+  entityType: 'goal' | 'initiative'; // Type of the entity
+}
+
+// New interface for initiatives (sub-tasks for goals)
+export interface Initiative {
   id: string;
   text: string;
   completed: boolean;
+  goalId: string; // ID of the parent goal
+  createdAt: string;
+  completedAt?: string;
+}
+
+export interface Goal {
+  id: string;
+  text: string;
+  description: string; // Added description field
+  completed: boolean;
+  isFixed?: boolean; // Flag for reserved fixed goals
   createdAt: string;
   completedAt?: string;
 }
@@ -52,6 +73,8 @@ export interface AppData {
   actions: Action[];
   journalEntries: JournalEntry[];
   goals: Goal[];
+  initiatives: Initiative[]; // Added initiatives array
+  checkIns: CheckIn[]; // Added check-ins array
   settings: {
     customEmotions: boolean;
     theme: 'light' | 'dark';
@@ -88,23 +111,117 @@ const initialData: AppData = {
   journalEntries: [],
   goals: [
     {
+      id: 'g_work',
+      text: 'Work',
+      description: 'Work-related tasks and projects',
+      completed: false,
+      isFixed: true,
+      createdAt: new Date().toISOString(),
+    },
+    {
+      id: 'g_life',
+      text: 'Life',
+      description: 'Personal life tasks and routines',
+      completed: false,
+      isFixed: true,
+      createdAt: new Date().toISOString(),
+    },
+    {
       id: 'g1',
       text: 'Practice mindfulness for 10 minutes each day',
+      description: '',
       completed: false,
       createdAt: new Date().toISOString(),
     },
     {
       id: 'g2',
       text: 'Complete one important task before checking email',
+      description: '',
       completed: false,
       createdAt: new Date().toISOString(),
     },
     {
       id: 'g3',
       text: 'Take a short walk after lunch',
+      description: 'Going for a walk helps with digestion and improves focus for the afternoon',
       completed: false,
       createdAt: new Date().toISOString(),
     },
+  ],
+  initiatives: [
+    {
+      id: 'i1',
+      text: 'Try different meditation apps to find the best one',
+      completed: false,
+      goalId: 'g1',
+      createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 'i2',
+      text: 'Set up "Focus Time" blocks on calendar',
+      completed: true,
+      goalId: 'g2',
+      createdAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
+      completedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 'i3',
+      text: 'Find nearby parks or walking routes',
+      completed: false,
+      goalId: 'g3',
+      createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    }
+  ],
+  checkIns: [
+    {
+      id: 'ci1',
+      content: 'Tried Headspace app today. The basic course seems promising.',
+      timestamp: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+      entityId: 'i1',
+      entityType: 'initiative'
+    },
+    {
+      id: 'ci2',
+      content: 'Explored Calm app. The sleep stories are nice but meditation interface is not as intuitive as Headspace.',
+      timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+      entityId: 'i1',
+      entityType: 'initiative'
+    },
+    {
+      id: 'ci3',
+      content: 'Added two 1-hour focus blocks to my calendar for tomorrow.',
+      timestamp: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+      entityId: 'i2',
+      entityType: 'initiative'
+    },
+    {
+      id: 'ci4',
+      content: 'Completed a full day using the focus time blocks. Got much more done than usual!',
+      timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      entityId: 'i2',
+      entityType: 'initiative'
+    },
+    {
+      id: 'ci5',
+      content: 'Found a great walking route through the nearby park. Takes about 20 minutes to complete.',
+      timestamp: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
+      entityId: 'i3',
+      entityType: 'initiative'
+    },
+    {
+      id: 'ci6',
+      content: 'Making progress on the mindfulness practice. Completed 5 days in a row.',
+      timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      entityId: 'g1',
+      entityType: 'goal'
+    },
+    {
+      id: 'ci7',
+      content: 'Started using my walks to practice mindful attention to surroundings.',
+      timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+      entityId: 'g3',
+      entityType: 'goal'
+    }
   ],
   settings: {
     customEmotions: false,
@@ -126,9 +243,24 @@ interface DataContextType {
   updateJournalEntry: (id: string, content: string) => void;
   addEmotionToJournal: (date: string, emotionRecord: EmotionRecord) => string; // Returns the entry ID
   removeEmotionFromJournal: (entryId: string, timestamp: string) => void; // Remove emotion record by timestamp
-  addGoal: (text: string) => void;
+  
+  // Goals
+  addGoal: (text: string, description?: string) => void;
+  updateGoal: (id: string, updates: Partial<Omit<Goal, 'id' | 'createdAt' | 'isFixed'>>) => void;
   toggleGoal: (id: string) => void;
   removeGoal: (id: string) => void;
+  
+  // Initiatives
+  addInitiative: (text: string, goalId: string) => void;
+  updateInitiative: (id: string, text: string) => void;
+  toggleInitiative: (id: string) => void;
+  removeInitiative: (id: string) => void;
+  
+  // Check-ins
+  addCheckIn: (content: string, entityId: string, entityType: 'goal' | 'initiative') => void;
+  updateCheckIn: (id: string, content: string) => void;
+  removeCheckIn: (id: string) => void;
+  
   updateSettings: (settings: Partial<AppData['settings']>) => void;
   requestJournal: (req: JournalRequest) => void;
   isJournaling: boolean;
@@ -176,6 +308,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           
           parsedData.journalEntries = migratedEntries;
         }
+        
+        // Make sure all required arrays exist
+        parsedData.initiatives = parsedData.initiatives || [];
+        parsedData.checkIns = parsedData.checkIns || [];
         
         return parsedData;
       } catch (e) {
@@ -252,7 +388,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const updateJournalEntry = (id: string, content: string) => {
-    console.log("update with new ", content)
     setData((prev) => ({
       ...prev,
       journalEntries: prev.journalEntries.map((j) =>
@@ -326,10 +461,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   };
 
-  const addGoal = (text: string) => {
+  const addGoal = (text: string, description: string = '') => {
     const newGoal: Goal = {
       id: `g${Date.now()}`,
       text,
+      description,
       completed: false,
       createdAt: new Date().toISOString(),
     };
@@ -339,27 +475,139 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }));
   };
 
-  const toggleGoal = (id: string) => {
+  const updateGoal = (id: string, updates: Partial<Omit<Goal, 'id' | 'createdAt' | 'isFixed'>>) => {
     setData((prev) => ({
       ...prev,
       goals: prev.goals.map((g) =>
         g.id === id
-          ? {
-              ...g,
-              completed: !g.completed,
-              completedAt: g.completed
-                ? undefined
-                : new Date().toISOString(),
-            }
+          ? { ...g, ...updates }
           : g
       ),
     }));
   };
 
+  const toggleGoal = (id: string) => {
+    setData((prev) => {
+      const updatedGoals = prev.goals.map((g) => {
+        if (g.id === id && !g.isFixed) {
+          return {
+            ...g,
+            completed: !g.completed,
+            completedAt: g.completed
+              ? undefined
+              : new Date().toISOString(),
+          };
+        }
+        return g;
+      });
+      
+      return {
+        ...prev,
+        goals: updatedGoals
+      };
+    });
+  };
+
   const removeGoal = (id: string) => {
+    setData((prev) => {
+      // Don't allow removal of fixed goals
+      if (prev.goals.find(g => g.id === id)?.isFixed) {
+        return prev;
+      }
+      
+      return {
+        ...prev,
+        goals: prev.goals.filter((g) => g.id !== id),
+        // Also remove associated initiatives
+        initiatives: prev.initiatives.filter((i) => i.goalId !== id),
+        // Also remove associated check-ins
+        checkIns: prev.checkIns.filter((c) => !(c.entityId === id && c.entityType === 'goal')),
+      };
+    });
+  };
+  
+  // Initiative functions
+  const addInitiative = (text: string, goalId: string) => {
+    const newInitiative: Initiative = {
+      id: `i${Date.now()}`,
+      text,
+      completed: false,
+      goalId,
+      createdAt: new Date().toISOString(),
+    };
     setData((prev) => ({
       ...prev,
-      goals: prev.goals.filter((g) => g.id !== id),
+      initiatives: [...prev.initiatives, newInitiative],
+    }));
+  };
+  
+  const updateInitiative = (id: string, text: string) => {
+    setData((prev) => ({
+      ...prev,
+      initiatives: prev.initiatives.map((i) =>
+        i.id === id
+          ? { ...i, text }
+          : i
+      ),
+    }));
+  };
+  
+  const toggleInitiative = (id: string) => {
+    setData((prev) => ({
+      ...prev,
+      initiatives: prev.initiatives.map((i) =>
+        i.id === id
+          ? {
+              ...i,
+              completed: !i.completed,
+              completedAt: i.completed
+                ? undefined
+                : new Date().toISOString(),
+            }
+          : i
+      ),
+    }));
+  };
+  
+  const removeInitiative = (id: string) => {
+    setData((prev) => ({
+      ...prev,
+      initiatives: prev.initiatives.filter((i) => i.id !== id),
+      // Also remove associated check-ins
+      checkIns: prev.checkIns.filter((c) => !(c.entityId === id && c.entityType === 'initiative')),
+    }));
+  };
+  
+  // Check-in functions
+  const addCheckIn = (content: string, entityId: string, entityType: 'goal' | 'initiative') => {
+    const newCheckIn: CheckIn = {
+      id: `c${Date.now()}`,
+      content,
+      timestamp: new Date().toISOString(),
+      entityId,
+      entityType,
+    };
+    setData((prev) => ({
+      ...prev,
+      checkIns: Array.isArray(prev.checkIns) ? [...prev.checkIns, newCheckIn] : [newCheckIn],
+    }));
+  };
+  
+  const updateCheckIn = (id: string, content: string) => {
+    setData((prev) => ({
+      ...prev,
+      checkIns: prev.checkIns.map((c) =>
+        c.id === id
+          ? { ...c, content }
+          : c
+      ),
+    }));
+  };
+  
+  const removeCheckIn = (id: string) => {
+    setData((prev) => ({
+      ...prev,
+      checkIns: prev.checkIns.filter((c) => c.id !== id),
     }));
   };
 
@@ -399,8 +647,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     addEmotionToJournal,
     removeEmotionFromJournal,
     addGoal,
+    updateGoal,
     toggleGoal,
     removeGoal,
+    addInitiative,
+    updateInitiative,
+    toggleInitiative,
+    removeInitiative,
+    addCheckIn,
+    updateCheckIn,
+    removeCheckIn,
     updateSettings,
     requestJournal,
     isJournaling,

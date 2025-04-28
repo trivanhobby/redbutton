@@ -20,17 +20,24 @@ A minimalist assistant application designed to help users consciously react to t
   - Review past entries to track patterns
   - AI-assisted journaling with templates and polishing
   - Auto-save as you type
+  - Smooth animations for a modern user experience
 
 - **Calendar & Stats**: Visualize your emotional patterns
   - Calendar view with color-coded emotional states
   - Statistics on emotion frequency and distribution
+  - Interactive charts and visualizations
 
-- **Goals**: Set and track personal goals
-  - Goals provide context for AI suggestions
-  - Mark goals as complete as you achieve them
+- **Goals & Initiatives**: Set and track personal goals
+  - Organized with predefined "Work" and "Life" categories
+  - Create custom goals with descriptions
+  - Add initiatives (sub-tasks) to each goal
+  - Track progress with check-ins
+  - Mark goals and initiatives as complete
+  - Sleek, animated UI for adding and managing goals
 
 - **Settings**: Customize your experience
   - Add custom emotions with emojis
+  - Toggle between light and dark themes
   - Enable/disable AI suggestions
   - Set your OpenAI API key for personalized suggestions
 
@@ -50,6 +57,14 @@ RedButton comes with two AI-powered features to enhance your journaling experien
    - Preserving all your personal thoughts and feelings
 
 These features are designed to make journaling more accessible and rewarding, especially when you're not sure where to start or want to improve your writing.
+
+## User Interface
+
+- **Modern Dark Theme**: Easy on the eyes with a dark interface
+- **Responsive Design**: Works on various screen sizes
+- **Smooth Animations**: Polished interactions and transitions using Framer Motion
+- **Tailwind CSS**: Clean, consistent styling throughout the application
+- **Electron Integration**: System tray menu for quick access to emotion tracking
 
 ## Getting Started
 
@@ -116,11 +131,11 @@ Note: For security, API keys are never sent to any server and are only stored lo
 - **Frontend**: React with TypeScript
 - **Styling**: TailwindCSS
 - **State Management**: React Context API
-- **UI Framework**: Custom components
-- **AI Integration**: OpenAI API
-- **Desktop Application**: Electron
+- **UI Framework**: Custom components with Framer Motion animations
+- **AI Integration**: OpenAI API (GPT-3.5 Turbo and GPT-4o mini models)
+- **Desktop Application**: Electron with menu bar integration
 - **Data Storage**: Local storage (JSON)
-- **Animations**: Framer Motion
+- **Animations**: Framer Motion with shared animation variants
 - **Charting**: Chart.js
 
 ## Acknowledgments

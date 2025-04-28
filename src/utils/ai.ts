@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { Emotion, Action, Goal, JournalEntry } from '../context/DataContext';
+import { Emotion, Action, Goal, JournalEntry, AppData } from '../context/DataContext';
 
 // Initialize the OpenAI client
 let openai: OpenAI | null = null;
@@ -71,24 +71,91 @@ export const initializeOpenAIFromStorage = () => {
   }
 };
 
+// Gets the OpenAI instance, or null if not initialized
+export const getOpenAI = (): OpenAI | null => {
+  return openai;
+};
+
+const defaultSuggestions = [
+  'Take a deep breath and count to 10',
+  'Write down what you are feeling right now',
+  'Drink a glass of water and stretch',
+]
+
+// Helper function to format goals with initiatives and check-ins
+const formatGoalsWithDetails = (
+  goals: Goal[], 
+  initiatives: any[] = [], 
+  checkIns: any[] = []
+): string => {
+  if (!goals || goals.length === 0) {
+    return "No goals set yet.";
+  }
+
+  // Filter to active goals
+  const activeGoals = goals.filter(goal => !goal.completed);
+  
+  return activeGoals.map(goal => {
+    // Get initiatives for this goal
+    const goalInitiatives = initiatives
+      .filter(initiative => initiative.goalId === goal.id && !initiative.completed)
+      .map(initiative => {
+        // Get check-ins for this initiative
+        const initiativeCheckIns = checkIns
+          .filter(checkIn => checkIn.entityId === initiative.id && checkIn.entityType === 'initiative')
+          .map(checkIn => `    - Check-in (${new Date(checkIn.timestamp).toLocaleDateString()}): ${checkIn.content}`);
+        
+        const initiativeStr = `  - Initiative: ${initiative.text}`;
+        
+        if (initiativeCheckIns.length > 0) {
+          return initiativeStr + '\n' + initiativeCheckIns.join('\n');
+        }
+        return initiativeStr;
+      });
+    
+    // Get check-ins for this goal
+    const goalCheckIns = checkIns
+      .filter(checkIn => checkIn.entityId === goal.id && checkIn.entityType === 'goal')
+      .map(checkIn => `  - Check-in (${new Date(checkIn.timestamp).toLocaleDateString()}): ${checkIn.content}`);
+    
+    let goalString = `Goal: ${goal.text}`;
+    
+    if (goal.description) {
+      goalString += `\n  Description: ${goal.description}`;
+    }
+    
+    if (goalInitiatives.length > 0) {
+      goalString += '\n  Initiatives:\n' + goalInitiatives.join('\n');
+    }
+    
+    if (goalCheckIns.length > 0) {
+      goalString += '\n  Goal Check-ins:\n' + goalCheckIns.join('\n');
+    }
+    
+    return goalString;
+  }).join('\n\n');
+};
+
 // This function generates suggestions based on the user's emotional state and goals
 export const generateSuggestions = async (
   emotion: Emotion,
   availableMinutes: number,
-  goals: Goal[],
+  data: AppData,
   recentJournalEntries: JournalEntry[]
 ): Promise<string[]> => {
   if (!openai) {
-    return [
-      'Take a deep breath and count to 10',
-      'Write down what you are feeling right now',
-      'Drink a glass of water and stretch',
-    ];
+    return defaultSuggestions;
   }
 
   try {
-    // Extract active goals
-    const activeGoals = goals.filter(goal => !goal.completed).map(goal => goal.text);
+    // Get all data from localStorage for complete context
+    
+    const goals = data.goals;
+    const initiatives = data.initiatives;
+    const checkIns = data.checkIns;
+    
+    // Format goals with initiatives and check-ins
+    const formattedGoals = formatGoalsWithDetails(goals, initiatives, checkIns);
     
     // Extract recent journal content
     const recentContent = recentJournalEntries
@@ -98,23 +165,27 @@ export const generateSuggestions = async (
     
     // Create a prompt for the OpenAI API
     const prompt = `
-    The user is feeling ${emotion.name.toLowerCase()} (${emotion.emoji}) right now and has ${availableMinutes} minutes available to improve his state.
+    The user is feeling ${emotion.name.toLowerCase()} (${emotion.emoji}) right now and has ${availableMinutes} minutes available to improve their state.
     
-    Their goals are:
-    ${activeGoals.map(goal => `- ${goal}`).join('\n')}
+    Their goals and initiatives are:
+    ${formattedGoals}
     === 
     Recent journal entries:
     ${recentContent || 'No recent entries'}
     ===
-    Given their current emotional state, goals, and recent reflections, suggest ${availableMinutes < 15 ? '1-2' : '2-3'} specific, actionable steps they can take in the next ${availableMinutes} minutes to feel better(or if emotion is positive - to use the momentum) and move towards their goals.
+    Given their current emotional state, goals, and recent reflections, suggest ${availableMinutes < 15 ? '1-2' : '2-3'} specific, actionable steps they can take in the next ${availableMinutes} minutes to ${emotion.isPositive ? 'leverage their positive state and continue making progress' : 'feel better and address concerns'} related to their goals.
     
     The suggestions should be:
     1. Simple and concrete
     2. Achievable in the time frame
-    3. Related to their goals when possible
-    4. Sensitive to their emotional state
+    3. Related to their goals and initiatives when possible
+    4. Consider their check-ins for context of what they're working on
+    5. Sensitive to their emotional state
     
     Provide only the suggestions, each on a new line. Be concise and practical.
+
+    Note 1: Suggestions ARE alternatives - so each should use all the timeframe. 
+    Note 2: For negative emotions prioritize suggestions on feeling better and addressing concerns while not contradicting the goals. For positive emotions prioritize suggestions on leveraging the momentum and making progress towards the goals, choosing next step.
     `;
 
     const response = await openai.chat.completions.create({
@@ -133,53 +204,39 @@ export const generateSuggestions = async (
       .map(line => line.replace(/^[0-9-. ]+/, '').trim())
       .slice(0, 3);
     
-    return suggestions || [
-      'Take a deep breath and count to 10',
-      'Write down what you are feeling right now',
-      'Drink a glass of water and stretch',
-    ];
+    return suggestions || defaultSuggestions;
   } catch (error) {
     console.error('Failed to generate suggestions:', error);
-    return [
-      'Take a deep breath and count to 10',
-      'Write down what you are feeling right now',
-      'Drink a glass of water and stretch',
-    ];
+    return defaultSuggestions;
   }
 };
 
 // This function generates a journal template with guiding questions based on emotions and context
 export const generateJournalTemplate = async (
   emotionRecords: any[],
-  emotions: Emotion[],
-  goals: Goal[],
+  data: AppData,
   previousEntries: string[] = []
 ): Promise<string> => {
   if (!openai) {
-    return `
-# Journal Entry
-
-## How I'm feeling
-_Write about your emotions today..._
-
-## Questions to reflect on
-- What's the strongest emotion I felt today and why?
-- What did I learn or accomplish?
-- What am I grateful for?
-- What could I have done differently?
-
-## Plans for tomorrow
-_What are my intentions for tomorrow?_
-`;
+    return getDefaultJournalTemplate();
   }
 
   try {
+    // Get all data from localStorage for complete context
+    const emotions = data.emotions;
+    const goals = data.goals;
+    const initiatives = data.initiatives;
+    const checkIns = data.checkIns;
+        
+    // Format goals with initiatives and check-ins
+    const formattedGoals = formatGoalsWithDetails(goals, initiatives, checkIns);
+    
     // Get emotion names from records
     const emotionNames = emotionRecords.map(record => {
       const emotion = emotions.find(e => e.id === record.emotionId);
       return emotion ? `${emotion.name} (${emotion.emoji})` : 'Unknown';
     });
-    const activeGoals = goals.filter(goal => !goal.completed).map(goal => goal.text);
+    
     // Create a prompt for the API
     const prompt = `
     Create a personalized journal template for today based on the following emotions the user experienced:
@@ -188,12 +245,12 @@ _What are my intentions for tomorrow?_
     ${previousEntries.length > 0 ? `Here are excerpts from their recent journal entries for context:
     ${previousEntries.join('\n\n')}` : ''}
     ===
-    Here are active goals:
-    ${activeGoals.join('\n\n')}
+    Here are their active goals, initiatives, and check-ins:
+    ${formattedGoals}
     ===
     Create a helpful journal template with:
-    3-5 questions to reflect and some thoughts. Keep in short and not too hard to fill.
-    for questions use regular text, for placeholders what should contains some ideas what to fill use <>
+    3-5 questions to reflect on, considering their goals, initiatives, check-ins, and emotions. Keep it short and not too hard to fill.
+    For questions use regular text, for placeholders of what should be filled use <>.
 
     Keep the tone supportive, thoughtful, and introspective.
     Format the template using Markdown, with headers, bullet points, and sections.
@@ -205,7 +262,7 @@ _What are my intentions for tomorrow?_
       messages: [
         { 
           role: 'system', 
-          content: 'You are a compassionate journaling assistant that helps people process their emotions through reflective writing.' 
+          content: 'You are a compassionate journaling assistant that helps people process their emotions and make progress on their goals through reflective writing.' 
         },
         { role: 'user', content: prompt }
       ],

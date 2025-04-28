@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useData, EmotionRecord } from '../context/DataContext';
 import { format, isToday, parseISO, formatDistanceToNow, subDays } from 'date-fns';
 import { generateJournalTemplate, polishJournalEntry } from '../utils/ai';
+import { motion, AnimatePresence } from 'framer-motion';
+import { fadeInVariants, listItemVariants, containerVariants } from '../utils/animations';
 
 const JournalPage: React.FC = () => {
   const { data, addJournalEntry, updateJournalEntry, removeEmotionFromJournal } = useData();
@@ -70,8 +72,7 @@ const JournalPage: React.FC = () => {
       // Generate a template
       const template = await generateJournalTemplate(
         currentDayEmotions, 
-        data.emotions,
-        data.goals,
+        data,
         recentEntries
       );
       
@@ -152,17 +153,28 @@ const JournalPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto text-gray-200">
+    <motion.div 
+      className="max-w-4xl mx-auto text-gray-200"
+      initial="hidden"
+      animate="visible"
+      variants={fadeInVariants}
+    >
       <h1 className="text-3xl font-bold mb-6">Journal</h1>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Sidebar with dates */}
-        <div className="md:col-span-1 bg-gray-800 rounded-lg shadow-md p-4">
+        <motion.div 
+          className="md:col-span-1 bg-gray-800 rounded-lg shadow-md p-4"
+          variants={containerVariants}
+        >
           <h2 className="text-xl font-semibold mb-4 text-white">Entries</h2>
-          <div className="space-y-2 max-h-[70vh] overflow-y-auto">
+          <motion.div 
+            className="space-y-2 max-h-[70vh] overflow-y-auto"
+            variants={containerVariants}
+          >
             {journalDates.length > 0 ? (
-              journalDates.map(date => (
-                <button
+              journalDates.map((date, index) => (
+                <motion.button
                   key={date}
                   className={`w-full text-left p-3 rounded-md transition-colors ${
                     currentDate === date 
@@ -170,19 +182,24 @@ const JournalPage: React.FC = () => {
                       : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
                   }`}
                   onClick={() => setCurrentDate(date)}
+                  variants={listItemVariants}
+                  custom={index}
                 >
                   {format(parseISO(date), 'MMM dd, yyyy')}
                   {isToday(parseISO(date)) && ' (Today)'}
-                </button>
+                </motion.button>
               ))
             ) : (
               <p className="text-gray-400 italic">No journal entries yet.</p>
             )}
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
         
         {/* Main journal content */}
-        <div className="md:col-span-2 bg-gray-800 rounded-lg shadow-md p-4">
+        <motion.div 
+          className="md:col-span-2 bg-gray-800 rounded-lg shadow-md p-4"
+          variants={fadeInVariants}
+        >
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-semibold text-white">
               {isToday(parseISO(currentDate)) 
@@ -192,10 +209,12 @@ const JournalPage: React.FC = () => {
             <div className="flex space-x-2">
               {isEditing ? (
                 <>
-                  <button
+                  <motion.button
                     className={`py-2 px-4 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center ${isLoading.propose ? 'opacity-70 cursor-not-allowed' : ''}`}
                     onClick={handleProposeTemplate}
                     disabled={isLoading.propose}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                   >
                     {isLoading.propose ? (
                       <>
@@ -206,11 +225,13 @@ const JournalPage: React.FC = () => {
                         Proposing...
                       </>
                     ) : 'Propose'}
-                  </button>
-                  <button
+                  </motion.button>
+                  <motion.button
                     className={`py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center ${isLoading.polish || !journalContent.trim() ? 'opacity-70 cursor-not-allowed' : ''}`}
                     onClick={handlePolishEntry}
                     disabled={isLoading.polish || !journalContent.trim()}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                   >
                     {isLoading.polish ? (
                       <>
@@ -221,16 +242,18 @@ const JournalPage: React.FC = () => {
                         Polishing...
                       </>
                     ) : 'Polish'}
-                  </button>
+                  </motion.button>
                 </>
               ) : (
                 isToday(parseISO(currentDate)) && (
-                  <button
+                  <motion.button
                     className="py-2 px-4 bg-gray-700 hover:bg-gray-600 rounded-md text-gray-200"
                     onClick={() => setIsEditing(true)}
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                   >
                     Edit
-                  </button>
+                  </motion.button>
                 )
               )}
             </div>
@@ -238,17 +261,25 @@ const JournalPage: React.FC = () => {
           
           {/* Emotions timeline display */}
           {sortedEmotionRecords.length > 0 && (
-            <div className="mb-6">
+            <motion.div 
+              className="mb-6"
+              variants={fadeInVariants}
+            >
               <p className="text-sm text-gray-400 mb-2">Emotions Timeline:</p>
-              <div className="space-y-3 border-l-2 border-gray-700 pl-4 py-2">
+              <motion.div 
+                className="space-y-3 border-l-2 border-gray-700 pl-4 py-2"
+                variants={containerVariants}
+              >
                 {sortedEmotionRecords.map((record, index) => {
                   const emotion = data.emotions.find(e => e.id === record.emotionId);
                   if (!emotion) return null;
                   
                   return (
-                    <div 
+                    <motion.div 
                       key={index}
                       className="relative"
+                      variants={listItemVariants}
+                      custom={index}
                     >
                       <div className="absolute w-3 h-3 rounded-full bg-primary -left-[22px] top-1.5"></div>
                       <div className={`p-3 rounded-md ${
@@ -295,59 +326,91 @@ const JournalPage: React.FC = () => {
                           </div>
                         )}
                       </div>
-                    </div>
+                    </motion.div>
                   );
                 })}
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
           )}
           
           {/* Journal text area */}
-          {isEditing ? (
-            <textarea
-              className="w-full p-3 border border-gray-700 rounded-md mb-4 bg-gray-700 text-gray-200 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              value={journalContent}
-              onChange={(e) => setJournalContent(e.target.value)}
-              placeholder="Write your thoughts here or use the 'Propose' button to get a template..."
-              rows={12}
-            />
-          ) : (
-            <div className="p-3 border border-gray-700 rounded-md mb-4 min-h-[200px] whitespace-pre-wrap bg-gray-700/50 text-gray-200">
-              {journalContent || (
-                <span className="text-gray-500 italic">
-                  {isToday(parseISO(currentDate)) 
-                    ? 'No entry for today yet. Click "Edit" to create one.' 
-                    : 'No entry for this date.'}
-                </span>
-              )}
-            </div>
-          )}
+          <AnimatePresence mode="wait">
+            {isEditing ? (
+              <motion.textarea
+                key="textarea"
+                className="w-full p-3 border border-gray-700 rounded-md mb-4 bg-gray-700 text-gray-200 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                value={journalContent}
+                onChange={(e) => setJournalContent(e.target.value)}
+                placeholder="Write your thoughts here or use the 'Propose' button to get a template..."
+                rows={12}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+              />
+            ) : (
+              <motion.div
+                key="display"
+                className="p-3 border border-gray-700 rounded-md mb-4 min-h-[200px] whitespace-pre-wrap bg-gray-700/50 text-gray-200"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                {journalContent || (
+                  <span className="text-gray-500 italic">
+                    {isToday(parseISO(currentDate)) 
+                      ? 'No entry for today yet. Click "Edit" to create one.' 
+                      : 'No entry for this date.'}
+                  </span>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
           
           {/* Help text for the AI features */}
-          {isEditing && (
-            <div className="mb-4 text-sm text-gray-400 bg-gray-800 p-3 rounded-md border border-gray-700">
-              <p><strong>Propose:</strong> Generate a personalized journal template with prompts based on your emotions.</p>
-              <p><strong>Polish:</strong> Improve the flow and readability of your journal entry while preserving your thoughts.</p>
-              <p className="mt-1 text-xs">Note: Your journal entries are automatically saved as you type.</p>
-            </div>
-          )}
+          <AnimatePresence>
+            {isEditing && (
+              <motion.div 
+                className="mb-4 text-sm text-gray-400 bg-gray-800 p-3 rounded-md border border-gray-700"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+              >
+                <p><strong>Propose:</strong> Generate a personalized journal template with prompts based on your emotions.</p>
+                <p><strong>Polish:</strong> Improve the flow and readability of your journal entry while preserving your thoughts.</p>
+                <p className="mt-1 text-xs">Note: Your journal entries are automatically saved as you type.</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
           
           {/* Actions taken */}
           {currentEntryActions && currentEntryActions.length > 0 && (
-            <div>
+            <motion.div
+              variants={fadeInVariants}
+            >
               <p className="text-sm text-gray-400 mb-1">Actions taken:</p>
-              <ul className="list-disc list-inside space-y-1 ml-2 text-gray-300">
-                {currentEntryActions.map(action => (
-                  <li key={action.id} className="text-sm">
+              <motion.ul 
+                className="list-disc list-inside space-y-1 ml-2 text-gray-300"
+                variants={containerVariants}
+              >
+                {currentEntryActions.map((action, index) => (
+                  <motion.li 
+                    key={action.id} 
+                    className="text-sm"
+                    variants={listItemVariants}
+                    custom={index}
+                  >
                     {action.text}
-                  </li>
+                  </motion.li>
                 ))}
-              </ul>
-            </div>
+              </motion.ul>
+            </motion.div>
           )}
-        </div>
+        </motion.div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
