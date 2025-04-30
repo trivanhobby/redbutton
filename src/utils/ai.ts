@@ -1,80 +1,5 @@
-import OpenAI from 'openai';
 import { Emotion, Action, Goal, JournalEntry, AppData } from '../context/DataContext';
-
-// Initialize the OpenAI client
-let openai: OpenAI | null = null;
-
-// This function tries to initialize OpenAI with the provided key
-export const initializeOpenAI = (apiKey: string) => {
-  if (!apiKey || apiKey.trim() === '') {
-    return false;
-  }
-  
-  try {
-    openai = new OpenAI({
-      apiKey,
-      dangerouslyAllowBrowser: true, // This is for browser usage, in production use a backend
-    });
-    
-    // We could potentially validate the API key by making a small test request
-    // This would be more secure than just checking format, but would use an API call
-    // For example: openai.models.list().then(() => {...}).catch(() => {...})
-    
-    return true;
-  } catch (error) {
-    console.error('Failed to initialize OpenAI client:', error);
-    return false;
-  }
-};
-
-// Initializes OpenAI with a stored API key if available
-export const initializeOpenAIFromStorage = () => {
-  try {
-    // First check localStorage
-    const savedData = localStorage.getItem('redButtonData');
-    if (savedData) {
-      const parsedData = JSON.parse(savedData);
-      const apiKey = parsedData?.settings?.apiKey;
-      
-      if (apiKey && apiKey.trim() !== '') {
-        return initializeOpenAI(apiKey);
-      }
-    }
-    
-    // If no key in localStorage, check environment variables
-    const envApiKey = process.env.REACT_APP_OPENAI_API_KEY;
-    if (envApiKey && envApiKey.trim() !== '') {
-      console.log('Using OpenAI API key from environment variables');
-      
-      // Initialize OpenAI with the environment variable
-      const success = initializeOpenAI(envApiKey);
-      
-      // If successful, also save to app data for future use
-      if (success && savedData) {
-        try {
-          const parsedData = JSON.parse(savedData);
-          parsedData.settings.apiKey = envApiKey;
-          localStorage.setItem('redButtonData', JSON.stringify(parsedData));
-          console.log('Saved environment API key to local storage');
-        } catch (e) {
-          console.error('Failed to save environment API key to local storage', e);
-        }
-      }
-      
-      return success;
-    }
-    
-    return false;
-  } catch (error) {
-    console.error('Error initializing OpenAI from storage:', error);
-    return false;
-  }
-};
-
-// Gets the OpenAI instance, or null if not initialized
-export const getOpenAI = (): OpenAI | null => {
-  return openai;
-};
+import * as api from './api';
 
 // Define a new interface for suggestions with related goals/initiatives
 export interface EnhancedSuggestion {
@@ -92,61 +17,92 @@ const defaultSuggestions: EnhancedSuggestion[] = [
   { text: 'Drink a glass of water and stretch' },
 ];
 
-// Helper function to format goals with initiatives and check-ins
-const formatGoalsWithDetails = (
-  goals: Goal[], 
-  initiatives: any[] = [], 
-  checkIns: any[] = []
-): string => {
-  if (!goals || goals.length === 0) {
-    return "No goals set yet.";
+// Gets the OpenAI API key from storage
+export const getApiKeyFromStorage = (): string | null => {
+  try {
+    const savedData = localStorage.getItem('redButtonData');
+    if (savedData) {
+      const parsedData = JSON.parse(savedData);
+      const apiKey = parsedData?.settings?.apiKey;
+      
+      if (apiKey && apiKey.trim() !== '') {
+        return apiKey;
+      }
+    }
+    return null;
+  } catch (error) {
+    console.error('Error retrieving API key from storage:', error);
+    return null;
   }
-
-  // Filter to active goals
-  const activeGoals = goals.filter(goal => !goal.completed);
-  
-  return activeGoals.map(goal => {
-    // Get initiatives for this goal
-    const goalInitiatives = initiatives
-      .filter(initiative => initiative.goalId === goal.id && !initiative.completed)
-      .map(initiative => {
-        // Get check-ins for this initiative
-        const initiativeCheckIns = checkIns
-          .filter(checkIn => checkIn.entityId === initiative.id && checkIn.entityType === 'initiative')
-          .map(checkIn => `    - Check-in (${new Date(checkIn.timestamp).toLocaleDateString()}): ${checkIn.content}`);
-        
-        const initiativeStr = `  - Initiative: ${initiative.text} (ID: ${initiative.id})`;
-        
-        if (initiativeCheckIns.length > 0) {
-          return initiativeStr + '\n' + initiativeCheckIns.join('\n');
-        }
-        return initiativeStr;
-      });
-    
-    // Get check-ins for this goal
-    const goalCheckIns = checkIns
-      .filter(checkIn => checkIn.entityId === goal.id && checkIn.entityType === 'goal')
-      .map(checkIn => `  - Check-in (${new Date(checkIn.timestamp).toLocaleDateString()}): ${checkIn.content}`);
-    
-    let goalString = `Goal: ${goal.text} (ID: ${goal.id})`;
-    
-    if (goal.description) {
-      goalString += `\n  Description: ${goal.description}`;
-    }
-    
-    if (goalInitiatives.length > 0) {
-      goalString += '\n  Initiatives:\n' + goalInitiatives.join('\n');
-    }
-    
-    if (goalCheckIns.length > 0) {
-      goalString += '\n  Goal Check-ins:\n' + goalCheckIns.join('\n');
-    }
-    
-    return goalString;
-  }).join('\n\n');
 };
 
-// Gets suggestions for a given emotion and time availability
+// Initialize the OpenAI client with the stored API key
+export const initializeOpenAIFromStorage = (): boolean => {
+  try {
+    // Get API key from storage
+    const apiKey = getApiKeyFromStorage();
+    
+    // If no key in localStorage, check environment variables
+    const envApiKey = process.env.REACT_APP_OPENAI_API_KEY;
+    if (!apiKey && envApiKey && envApiKey.trim() !== '') {
+      console.log('Using OpenAI API key from environment variables');
+      
+      // Save to app data for future use
+      try {
+        const savedData = localStorage.getItem('redButtonData');
+        if (savedData) {
+          const parsedData = JSON.parse(savedData);
+          parsedData.settings.apiKey = envApiKey;
+          localStorage.setItem('redButtonData', JSON.stringify(parsedData));
+          console.log('Saved environment API key to local storage');
+          return true;
+        }
+      } catch (e) {
+        console.error('Failed to save environment API key to local storage', e);
+      }
+    }
+    
+    return !!apiKey || !!envApiKey;
+  } catch (error) {
+    console.error('Error initializing OpenAI from storage:', error);
+    return false;
+  }
+};
+
+// This function is used to check if the API key is valid
+export const initializeOpenAI = (apiKey: string): boolean => {
+  if (!apiKey || apiKey.trim() === '') {
+    return false;
+  }
+  
+  try {
+    // Store the API key in localStorage
+    const savedData = localStorage.getItem('redButtonData');
+    if (savedData) {
+      const parsedData = JSON.parse(savedData);
+      parsedData.settings.apiKey = apiKey;
+      localStorage.setItem('redButtonData', JSON.stringify(parsedData));
+      console.log('Saved API key to local storage');
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Failed to initialize OpenAI client:', error);
+    return false;
+  }
+};
+
+/**
+ * Returns the OpenAI instance or null
+ * Note: We now handle all OpenAI operations through the backend API
+ * This function is maintained for backward compatibility but always returns null
+ */
+export const getOpenAI = (): null => {
+  console.warn('Direct OpenAI access is deprecated. All OpenAI operations are now handled by the backend API.');
+  return null;
+};
+
+// Get suggestions for a specific emotion
 export const getSuggestionsForEmotion = async (
   emotionId: string,
   availableMinutes: number = 10,
@@ -161,238 +117,53 @@ export const getSuggestionsForEmotion = async (
       return defaultSuggestions;
     }
     
-    // Get recent journal entries (last 5)
-    const recentEntries = data.journalEntries
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 5);
-    
-    // Generate and return suggestions
-    return await generateSuggestions(emotion, availableMinutes, data, recentEntries);
+    // Call the backend API to generate suggestions
+    return await api.generateSuggestions(
+      emotionId,
+      emotion.name,
+      emotion.isPositive,
+      availableMinutes
+    );
   } catch (error) {
     console.error('Error getting suggestions for emotion:', error);
     return defaultSuggestions;
   }
 };
 
-// This function generates suggestions based on the user's emotional state and goals
-export const generateSuggestions = async (
-  emotion: Emotion,
-  availableMinutes: number,
-  data: AppData,
-  recentJournalEntries: JournalEntry[]
-): Promise<EnhancedSuggestion[]> => {
-  if (!openai) {
-    return defaultSuggestions;
-  }
-
-  try {
-    // Get all data from localStorage for complete context
-    const goals = data.goals;
-    const initiatives = data.initiatives;
-    const checkIns = data.checkIns;
-    
-    // Format goals with initiatives and check-ins
-    const formattedGoals = formatGoalsWithDetails(goals, initiatives, checkIns);
-    
-    // Extract recent journal content
-    const recentContent = recentJournalEntries
-      .slice(0, 3)
-      .map(entry => entry.content)
-      .join('\n');
-    
-    // Create a prompt for the OpenAI API
-    const prompt = `
-    The user is feeling ${emotion.name.toLowerCase()} (${emotion.emoji}) right now and has ${availableMinutes} minutes available to improve their state.
-    
-    Their goals and initiatives are:
-    ${formattedGoals}
-    === 
-    Recent journal entries:
-    ${recentContent || 'No recent entries'}
-    ===
-    Given their current emotional state, goals, and recent reflections, suggest ${availableMinutes < 15 ? '1-2' : '2-3'} specific, actionable steps they can take in the next ${availableMinutes} minutes to ${emotion.isPositive ? 'leverage their positive state and continue making progress' : 'feel better and address concerns'} related to their goals.
-    
-    The suggestions should be:
-    1. Simple and concrete
-    2. Achievable in the time frame
-    3. Related to their goals and initiatives when possible
-    4. Consider their check-ins for context of what they're working on
-    5. Sensitive to their emotional state
-    
-    For EACH suggestion, if it directly relates to a specific goal or initiative, mention the ID in the format [RELATED_TO: <goal_id>] or [RELATED_TO: <initiative_id>]. Prefer linking to initiatives over goals when possible.
-    
-    Provide only the suggestions, each on a new line. Be concise and practical.
-
-    Note 1: Suggestions ARE alternatives - so each should use all the timeframe. (if you have free 60 minutes - suggest 2-3 things each of them requiring 60 minutes)
-    Note 2: For negative emotions prioritize suggestions on feeling better and addressing concerns while not contradicting the goals. For positive emotions prioritize suggestions on leveraging the momentum and making progress towards the goals, choosing next step.
-    `;
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: 'You are a compassionate productivity assistant that helps people take mindful action based on their emotional state.' },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.7,
-      max_tokens: 350,
-    });
-
-    const rawSuggestions = response.choices[0].message.content
-      ?.split('\n')
-      .filter(line => line.trim().length > 0)
-      .map(line => line.replace(/^[0-9-. ]+/, '').trim())
-      .slice(0, 3) || [];
-    
-    // Parse suggestions to extract related goals/initiatives
-    const enhancedSuggestions: EnhancedSuggestion[] = rawSuggestions.map(suggestion => {
-      const relatedMatch = suggestion.match(/\[RELATED_TO:\s*(\w+)\]/i);
-      
-      if (relatedMatch && relatedMatch[1]) {
-        const relatedId = relatedMatch[1];
-        // Check if this is a goal ID
-        const relatedGoal = goals.find(g => g.id === relatedId);
-        if (relatedGoal) {
-          return {
-            text: suggestion.replace(/\[RELATED_TO:\s*\w+\]/i, '').trim(),
-            relatedItem: {
-              id: relatedId,
-              type: 'goal',
-              name: relatedGoal.text
-            }
-          };
-        }
-        
-        // Check if this is an initiative ID
-        const relatedInitiative = initiatives.find(i => i.id === relatedId);
-        if (relatedInitiative) {
-          const parentGoal = goals.find(g => g.id === relatedInitiative.goalId);
-          return {
-            text: suggestion.replace(/\[RELATED_TO:\s*\w+\]/i, '').trim(),
-            relatedItem: {
-              id: relatedId,
-              type: 'initiative',
-              name: relatedInitiative.text + (parentGoal ? ` (${parentGoal.text})` : '')
-            }
-          };
-        }
-      }
-      
-      // No related item found or no match
-      return { text: suggestion };
-    });
-    
-    return enhancedSuggestions.length > 0 ? enhancedSuggestions : defaultSuggestions;
-  } catch (error) {
-    console.error('Failed to generate suggestions:', error);
-    return defaultSuggestions;
-  }
-};
-
-// This function generates a journal template with guiding questions based on emotions and context
+// Generate a journal template
 export const generateJournalTemplate = async (
   emotionRecords: any[],
   data: AppData,
   previousEntries: string[] = []
 ): Promise<string> => {
-  if (!openai) {
-    return getDefaultJournalTemplate();
-  }
-
   try {
-    // Get all data from localStorage for complete context
-    const emotions = data.emotions;
-    const goals = data.goals;
-    const initiatives = data.initiatives;
-    const checkIns = data.checkIns;
-        
-    // Format goals with initiatives and check-ins
-    const formattedGoals = formatGoalsWithDetails(goals, initiatives, checkIns);
-    
-    // Get emotion names from records
-    const emotionNames = emotionRecords.map(record => {
-      const emotion = emotions.find(e => e.id === record.emotionId);
-      return emotion ? `${emotion.name} (${emotion.emoji})` : 'Unknown';
+    // Get emotion details from records
+    const emotionDetails = emotionRecords.map(record => {
+      const emotion = data.emotions.find(e => e.id === record.emotionId);
+      return emotion 
+        ? { name: emotion.name, isPositive: emotion.isPositive }
+        : { name: 'Unknown', isPositive: false };
     });
     
-    // Create a prompt for the API
-    const prompt = `
-    Create a personalized journal template for today based on the following emotions the user experienced:
-    ${emotionNames.length > 0 ? emotionNames.join(', ') : 'No emotions recorded yet today'}
-    
-    ${previousEntries.length > 0 ? `Here are excerpts from their recent journal entries for context:
-    ${previousEntries.join('\n\n')}` : ''}
-    ===
-    Here are their active goals, initiatives, and check-ins:
-    ${formattedGoals}
-    ===
-    Create a helpful journal template with:
-    3-5 questions to reflect on, considering their goals, initiatives, check-ins, and emotions and previous journal entries (that's most important!). Keep it short and not too hard to fill.
-    For questions use regular text, for placeholders of what should be filled use <>.
-
-    Keep the tone supportive, thoughtful, and introspective.
-    The template should be ready to use - the user will just need to fill in the blanks.
-    Don't use any formatting, just use regular text, no markdown or sections.
-    `;
-
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        { 
-          role: 'system', 
-          content: 'You are a compassionate journaling assistant that helps people process their emotions and make progress on their goals through reflective writing.' 
-        },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.7,
-      max_tokens: 750,
-    });
-
-    return response.choices[0].message.content || getDefaultJournalTemplate();
+    // Call the backend API to generate the template
+    return await api.generateJournalTemplate(emotionDetails, previousEntries);
   } catch (error) {
     console.error('Failed to generate journal template:', error);
     return getDefaultJournalTemplate();
   }
 };
 
-// This function polishes and improves the journal entry text
+// Polish a journal entry
 export const polishJournalEntry = async (
   entryContent: string
 ): Promise<string> => {
-  if (!openai || !entryContent.trim()) {
+  if (!entryContent.trim()) {
     return entryContent;
   }
 
   try {
-    const prompt = `
-    Please polish and improve the following journal entry, while preserving all the original thoughts, feelings, and ideas.
-    
-    Journal entry:
-    ${entryContent}
-    
-    Your improvements should:
-    1. Fix any grammar, spelling, and punctuation errors
-    2. Improve flow and readability
-    3. Add thoughtful transitions between ideas
-    4. Enhance clarity where thoughts seem muddled
-    5. Maintain the original voice and emotional tone
-    6. Keep all personal insights and details
-    
-    Return only the polished version of the text with no additional commentary.
-    `;
-
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        { 
-          role: 'system', 
-          content: 'You are a skilled editor who helps improve journal entries while preserving the author\'s voice and meaning.' 
-        },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.3, // Lower temperature for more focused editing
-      max_tokens: 1000,
-    });
-
-    return response.choices[0].message.content || entryContent;
+    // Call the backend API to polish the entry
+    return await api.polishJournalEntry(entryContent);
   } catch (error) {
     console.error('Failed to polish journal entry:', error);
     return entryContent;

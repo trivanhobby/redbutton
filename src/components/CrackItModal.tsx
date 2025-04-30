@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useData, Goal, Initiative, CheckIn } from '../context/DataContext';
 import { format } from 'date-fns';
 import { streamChatResponse, processFile, ChatContext, ChatMessage, MessageContent, TextContent, ImageContent } from '../utils/chat';
-import { getOpenAI } from '../utils/ai';
 import type { ChatCompletionMessageParam } from 'openai/resources';
 
 // Message types for the chat
@@ -91,23 +90,44 @@ const CrackItModal: React.FC<CrackItModalProps> = ({ goal, initiative, onClose }
     }
   }, [messages, storageKey]);
 
-  // Process non-image files for OpenAI
+  // Process non-image files for OpenAI using the backend API
   const processNonImageFile = async (file: File): Promise<string | null> => {
     try {
-      const openai = getOpenAI();
-      if (!openai) {
-        throw new Error('OpenAI client not initialized');
-      }
-
-      console.log(`Uploading file ${file.name} to OpenAI...`);
+      console.log(`Uploading file ${file.name} to OpenAI via backend...`);
       
-      const result = await openai.files.create({
-        file,
-        purpose: 'assistants',
+      // Create a FormData object for the file
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      // Get the base API URL
+      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000/api';
+      
+      // Create headers with auth token if available
+      const headers: HeadersInit = {};
+      const token = localStorage.getItem('authToken');
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      // Make the API request
+      const response = await fetch(`${API_BASE_URL}/ai/upload-file`, {
+        method: 'POST',
+        headers,
+        body: formData,
       });
-
-      console.log(`File uploaded successfully with ID: ${result.id}`);
-      return result.id;
+      
+      if (!response.ok) {
+        throw new Error(`Server responded with status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.success || !data.fileId) {
+        throw new Error('Failed to upload file');
+      }
+      
+      console.log(`File uploaded successfully with ID: ${data.fileId}`);
+      return data.fileId;
     } catch (error) {
       console.error('Error uploading file to OpenAI:', error);
       return null;
@@ -138,7 +158,7 @@ const CrackItModal: React.FC<CrackItModalProps> = ({ goal, initiative, onClose }
     // Process non-image attachments to upload to OpenAI
     const processedAttachments = [...attachments];
     
-    // Upload non-image files to OpenAI
+    // Upload non-image files to OpenAI through the backend
     for (let i = 0; i < processedAttachments.length; i++) {
       const attachment = processedAttachments[i];
       if (attachment.type !== 'image') {
@@ -148,7 +168,7 @@ const CrackItModal: React.FC<CrackItModalProps> = ({ goal, initiative, onClose }
           const blob = await response.blob();
           const file = new File([blob], attachment.name, { type: blob.type });
           
-          // Upload to OpenAI
+          // Upload to OpenAI through backend
           const fileId = await processNonImageFile(file);
           if (fileId) {
             processedAttachments[i] = {
@@ -245,7 +265,7 @@ const CrackItModal: React.FC<CrackItModalProps> = ({ goal, initiative, onClose }
       
       // Add note about file attachments if present
       const fileAttachments = userMessage.attachments?.filter(att => att.type !== 'image' && att.fileId);
-      if (fileAttachments && fileAttachments.length > 0 && inputMessage.trim()) {
+      if (fileAttachments && fileAttachments.length > 0) {
         for (const file of fileAttachments) {
           if (file.fileId) {
             messageContent.push({

@@ -1,10 +1,7 @@
 import { Goal, Initiative, AppData } from '../context/DataContext';
-import { initializeOpenAIFromStorage, getOpenAI } from './ai';
 import OpenAI from 'openai';
 import type { ChatCompletionMessageParam, ChatCompletionSystemMessageParam, ChatCompletionUserMessageParam, ChatCompletionAssistantMessageParam } from 'openai/resources';
-
-// Initialize OpenAI
-let openai: OpenAI | null = null;
+import * as api from './api';
 
 // Define types for message content
 export interface TextContent {
@@ -28,32 +25,6 @@ export interface FileContent {
 
 export type MessageContent = TextContent | ImageContent | FileContent;
 
-// Ensure OpenAI is initialized
-const ensureOpenAI = async (): Promise<OpenAI> => {
-  // Try to get the existing OpenAI instance
-  let openai = getOpenAI();
-
-  if (!openai) {
-    // Try to initialize OpenAI from storage
-    const success = initializeOpenAIFromStorage();
-    if (!success) {
-      throw new Error(
-        'OpenAI API key not found. Please add your API key in Settings.'
-      );
-    }
-    
-    // Get the initialized instance
-    openai = getOpenAI();
-    if (!openai) {
-      throw new Error(
-        'Failed to initialize OpenAI client. Please check your API key.'
-      );
-    }
-  }
-
-  return openai;
-};
-
 // Context interface for streaming chat
 export interface ChatContext {
   goal: {
@@ -76,14 +47,16 @@ export interface ChatMessage {
   content: string | MessageContent[];
 }
 
-/**
- * Stream a chat response from OpenAI with the given context
- * @param context The context for the chat (goal, initiative, check-ins)
- * @param history The conversation history
- * @param message The current user message (string or content array with images)
- * @param onChunk Callback for each chunk of streamed response
- * @returns The full response
- */
+// Helper function to create authorization headers
+const createAuthHeaders = () => {
+  const token = localStorage.getItem('authToken');
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+  };
+};
+
+// Stream chat response using the server API
 export const streamChatResponse = async (
   context: ChatContext,
   history: ChatMessage[],
@@ -91,99 +64,109 @@ export const streamChatResponse = async (
   onChunk: (chunk: string) => void
 ): Promise<{ fullResponse: string; checkIns: string[]; hasCheckIn: boolean }> => {
   try {
-    // Ensure OpenAI is initialized
-    const openai = await ensureOpenAI();
-    
-    // Build system message with initiative context and instruction
-    const systemMessage = `
-    You are an AI assistant helping the user break down their initiative: "${context.initiative.text}" which is part of their goal: "${context.goal.text}".
-    
-    ${context.goal.description ? `The goal description is: "${context.goal.description}"` : ''}
-    
-    ${context.checkIns.length > 0 
-      ? `Here are the check-ins (progress notes) for this initiative so far:
-      ${context.checkIns.map(c => `- ${new Date(c.timestamp).toLocaleDateString()}: ${c.content}`).join('\n')}` 
-      : 'There are no check-ins for this initiative yet.'}
-    
-    Your role is to help the user:
-    1. Break down the initiative into smaller, actionable steps
-    2. Identify potential obstacles and solutions
-    3. Suggest concrete next actions
-    4. Provide guidance on how to approach the initiative
-    
-    IMPORTANT: Every message should contain at least one potential improvement for user to take - a potential check-in (progress note) that the user might want to record, wrap it in <check_in> tags. For example: "<check_in>Completed initial research on design patterns.</check_in>"
-    
-    Keep your responses concise, practical and focused on helping the user make progress towards completing their initiative.
-    Important - your default response length is under 30 words. Don't make it larger if not asked about deep advice.
-
-    Stay personal. Don't be too formal. Give your advice.
-    `;
-    
-    // Convert string message to content format if needed
+    // Convert message to string if it's an array of MessageContent
     const messageContent = typeof message === 'string' 
-      ? [{ type: 'text', text: message }] as MessageContent[]
-      : message;
+      ? message 
+      : message.map(m => {
+          if (m.type === 'text') {
+            return m.text;
+          } else if (m.type === 'image_url') {
+            return `[image: ${m.image_url.url}]`;
+          } else if (m.type === 'file') {
+            return `[file: ${m.file.file_id}]`;
+          }
+          return '';
+        }).join(' ');
     
-    // Prepare messages array for OpenAI
-    const messages: ChatCompletionMessageParam[] = [
-      { role: 'system', content: systemMessage } as ChatCompletionSystemMessageParam
-    ];
+    // Convert history to string content if needed
+    const stringHistory = history.map(msg => ({
+      role: msg.role,
+      content: typeof msg.content === 'string' 
+        ? msg.content 
+        : msg.content.map(m => {
+            if (m.type === 'text') {
+              return m.text;
+            } else if (m.type === 'image_url') {
+              return `[image: ${m.image_url.url}]`;
+            } else if (m.type === 'file') {
+              return `[file: ${m.file.file_id}]`;
+            }
+            return '';
+          }).join(' ')
+    }));
     
-    // Add history messages with correct typing
-    for (const msg of history) {
-      // Convert content to appropriate format
-      const msgContent = typeof msg.content === 'string' ? msg.content : msg.content;
-      
-      // Type the message correctly based on role
-      if (msg.role === 'user') {
-        messages.push({
-          role: 'user',
-          content: msgContent
-        } as ChatCompletionUserMessageParam);
-      } else if (msg.role === 'assistant') {
-        // Assistant messages must have string content
-        messages.push({
-          role: 'assistant',
-          content: typeof msgContent === 'string' ? msgContent : 'Response with attachments'
-        } as ChatCompletionAssistantMessageParam);
-      }
-    }
+    const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000/api';
     
-    // Add current message with correct type
-    messages.push({
-      role: 'user',
-      content: messageContent
-    } as ChatCompletionUserMessageParam);
-    
-    // Call OpenAI streaming API
-    const stream = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: messages,
-      stream: true,
-      temperature: 0.7,
-      max_tokens: 1000,
+    // Create the EventSource for server-sent events
+    const response = await fetch(`${API_BASE_URL}/ai/initiative-chat`, {
+      method: 'POST',
+      headers: createAuthHeaders(),
+      body: JSON.stringify({
+        context,
+        history: stringHistory,
+        message: messageContent
+      })
     });
+    
+    // Create a reader from the response body
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('Failed to get reader from response');
+    }
     
     // Process the stream
     let fullResponse = '';
-    for await (const chunk of stream) {
-      if (chunk.choices[0]?.delta?.content) {
-        const content = chunk.choices[0].delta.content;
-        fullResponse += content;
-        onChunk(content);
-      }
-    }
+    let checkIns: string[] = [];
+    let hasCheckIn = false;
     
-    const checkIns = extractCheckIns(fullResponse);
-    const cleanedResponse = fullResponse.replace('<check_in>', '').replace('</check_in>', '');
+    // Function to process chunks of data
+    const processStream = async () => {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        // Convert the chunk to text
+        const chunkText = new TextDecoder().decode(value);
+        
+        // Process each event in the chunk
+        const events = chunkText.split('\n\n');
+        for (const event of events) {
+          if (!event.trim() || !event.startsWith('data: ')) continue;
+          
+          try {
+            const jsonData = JSON.parse(event.substring(6));
+            
+            if (jsonData.error) {
+              throw new Error(jsonData.error);
+            }
+            
+            if (jsonData.text) {
+              fullResponse += jsonData.text;
+              onChunk(jsonData.text);
+            }
+            
+            if (jsonData.done) {
+              // Extract additional data from the completion message
+              checkIns = jsonData.checkIns || [];
+              hasCheckIn = jsonData.hasCheckIn || false;
+              return;
+            }
+          } catch (e) {
+            console.error('Error parsing SSE data:', e);
+          }
+        }
+      }
+    };
+    
+    await processStream();
     
     return {
-      fullResponse: cleanedResponse,
-      checkIns: checkIns,
-      hasCheckIn: checkIns.length > 0
+      fullResponse,
+      checkIns,
+      hasCheckIn
     };
   } catch (error) {
-    console.error('Error in streaming chat response:', error);
+    console.error('Error in chat stream:', error);
     throw error;
   }
 };

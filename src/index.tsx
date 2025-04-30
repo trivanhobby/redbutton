@@ -4,6 +4,7 @@ import './index.css';
 import App from './App';
 import { BrowserRouter } from 'react-router-dom';
 import { DataProvider } from './context/DataContext';
+import { AuthProvider } from './context/AuthContext';
 
 // Create a root and render the app
 const root = ReactDOM.createRoot(
@@ -13,9 +14,11 @@ const root = ReactDOM.createRoot(
 root.render(
   <React.StrictMode>
     <BrowserRouter>
-      <DataProvider>
-        <App />
-      </DataProvider>
+      <AuthProvider>
+        <DataProvider>
+          <App />
+        </DataProvider>
+      </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>
 ); 

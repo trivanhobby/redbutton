@@ -164,66 +164,6 @@ const SettingsPage: React.FC = () => {
               <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
             </label>
           </div>
-          
-          {/* OpenAI API Key Input (only shown if AI is enabled) */}
-          {data.settings.aiEnabled && (
-            <div className="mt-4 p-4 border border-gray-700 rounded-md bg-gray-700">
-              <h3 className="font-medium mb-2 text-white">OpenAI API Key</h3>
-              <p className="text-sm text-gray-400 mb-3">
-                Enter your OpenAI API key to enable AI-powered suggestions.
-                Your key is stored securely in your browser's local storage and never sent to a server.
-              </p>
-              <div className="flex gap-2">
-                <input
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder={data.settings.apiKey ? "••••••••••••••••••••••••••" : "sk-..."}
-                  className="flex-1 p-2 border border-gray-600 rounded-md bg-gray-800 text-white"
-                />
-                {apiKeyStatus === 'success' ? (
-                  <button
-                    onClick={handleApiKeyReset}
-                    className="px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700"
-                  >
-                    Reset Key
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleApiKeySubmit}
-                    disabled={!apiKey.trim()}
-                    className={`px-4 py-2 rounded-md ${
-                      apiKeyStatus === 'error'
-                        ? 'bg-red-600 text-white'
-                        : 'bg-primary text-white'
-                    } ${!apiKey.trim() ? 'opacity-50 cursor-not-allowed' : 'hover:bg-opacity-90'}`}
-                  >
-                    {apiKeyStatus === 'error' ? 'Error' : 'Save'}
-                  </button>
-                )}
-              </div>
-              {apiKeyStatus === 'success' && (
-                <p className="mt-2 text-sm text-green-400">
-                  <span className="inline-flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                    API key is set and working
-                    {isKeyFromEnv && (
-                      <span className="ml-1 px-2 py-0.5 bg-gray-600 rounded-full text-xs">
-                        Loaded from environment
-                      </span>
-                    )}
-                  </span>
-                </p>
-              )}
-              {apiKeyStatus === 'error' && (
-                <p className="mt-2 text-sm text-red-400">
-                  The API key is invalid. Please check and try again.
-                </p>
-              )}
-            </div>
-          )}
         </div>
       </div>
       
