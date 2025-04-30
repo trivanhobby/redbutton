@@ -19,6 +19,32 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
     },
     resizeWindow: function (width, height) {
         electron_1.ipcRenderer.send('resize-window', { width: width, height: height });
+    },
+    // Timer functions
+    startTimer: function (timerStatus) {
+        electron_1.ipcRenderer.send('start-timer', timerStatus);
+        // Create and dispatch a custom event when timer is started
+        electron_1.ipcRenderer.once('timer-started', function (_, data) {
+            console.log('Timer started confirmed by main process:', data);
+            var event = new CustomEvent('timer-started', { detail: data });
+            document.dispatchEvent(event);
+        });
+    },
+    onTimerUpdate: function (callback) {
+        electron_1.ipcRenderer.on('timer-update', function (_, data) { return callback(data); });
+        return function () {
+            electron_1.ipcRenderer.removeAllListeners('timer-update');
+        };
+    },
+    stopTimer: function () {
+        electron_1.ipcRenderer.send('stop-timer');
+    },
+    // Timer journal entry function
+    onTimerJournalEntry: function (callback) {
+        electron_1.ipcRenderer.on('timer-journal-entry', function (_, data) { return callback(data); });
+        return function () {
+            electron_1.ipcRenderer.removeAllListeners('timer-journal-entry');
+        };
     }
 });
 //# sourceMappingURL=preload.js.map

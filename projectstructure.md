@@ -74,7 +74,6 @@ This document outlines the structure and organization of the RedButton applicati
 - `src/components/SuggestionDialog.tsx`: Modal component that listens for emotion-selected events and displays suggestions
 - `src/components/common/EmotionPicker.tsx`: Reusable component for selecting emotions
 - `src/components/common/TimeSelector.tsx`: Reusable component for selecting time
-- `src/components/EmotionSelector.tsx`: Component for selecting emotions within the main application
 
 #### Pages
 
@@ -86,7 +85,6 @@ This document outlines the structure and organization of the RedButton applicati
 
 #### Styles
 
-- `src/styles/EmotionSelector.css`: Styles for the emotion selector component
 - `src/styles/MenuBarWidget.css`: Styles for the menu bar widget
 
 ## Complete File List
@@ -111,7 +109,6 @@ This document outlines the structure and organization of the RedButton applicati
 ./src/App.tsx
 ./src/components/common/EmotionPicker.tsx
 ./src/components/common/TimeSelector.tsx
-./src/components/EmotionSelector.tsx
 ./src/components/layouts/MainLayout.tsx
 ./src/components/SuggestionDialog.tsx
 ./src/components/widgets/ActionSuggestions.tsx
@@ -124,7 +121,6 @@ This document outlines the structure and organization of the RedButton applicati
 ./src/pages/JournalPage.tsx
 ./src/pages/SettingsPage.tsx
 ./src/pages/WidgetPage.tsx
-./src/styles/EmotionSelector.css
 ./src/styles/MenuBarWidget.css
 ./src/types/electron.d.ts
 ./src/utils/ai.ts

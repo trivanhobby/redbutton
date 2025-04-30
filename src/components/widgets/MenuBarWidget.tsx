@@ -20,7 +20,7 @@ const TimePicker: React.FC<{
   selectedTime: number;
   onChange: (time: number) => void;
 }> = ({ selectedTime, onChange }) => {
-  const times = [5, 10, 30, 60, 120];
+  const times = [1, 5, 10, 30, 60, 120];
   
   return (
     <div className="time-picker">
@@ -278,15 +278,6 @@ const MenuBarWidget: React.FC = () => {
                 onClick={() => handleActionSelect(GreenAction.CELEBRATE)}
               >
                 <span className="text-gray-200">To celebrate it</span>
-              </button>
-              <button 
-                className={`w-full p-3 text-left rounded-md transition-colors
-                  ${selectedAction === GreenAction.JOURNAL 
-                    ? 'bg-green-900/30 border border-green-800' 
-                    : 'bg-gray-900 hover:bg-green-900/20 border border-gray-800 hover:border-green-800'}`}
-                onClick={() => handleActionSelect(GreenAction.JOURNAL)}
-              >
-                <span className="text-gray-200">To journal about what's going well</span>
               </button>
               <button 
                 className={`w-full p-3 text-left rounded-md transition-colors

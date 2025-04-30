@@ -19,7 +19,14 @@ export interface ImageContent {
   };
 }
 
-export type MessageContent = TextContent | ImageContent;
+export interface FileContent {
+  type: "file";
+  file: {
+    file_id: string;
+  };
+}
+
+export type MessageContent = TextContent | ImageContent | FileContent;
 
 // Ensure OpenAI is initialized
 const ensureOpenAI = async (): Promise<OpenAI> => {
@@ -82,7 +89,7 @@ export const streamChatResponse = async (
   history: ChatMessage[],
   message: string | MessageContent[],
   onChunk: (chunk: string) => void
-): Promise<{ fullResponse: string; hasCheckIn: boolean }> => {
+): Promise<{ fullResponse: string; checkIns: string[]; hasCheckIn: boolean }> => {
   try {
     // Ensure OpenAI is initialized
     const openai = await ensureOpenAI();
@@ -104,7 +111,7 @@ export const streamChatResponse = async (
     3. Suggest concrete next actions
     4. Provide guidance on how to approach the initiative
     
-    IMPORTANT: When suggesting a potential check-in (progress note) that the user might want to record, wrap it in <check_in> tags. For example: "<check_in>Completed initial research on design patterns.</check_in>"
+    IMPORTANT: Every message should contain at least one potential improvement for user to take - a potential check-in (progress note) that the user might want to record, wrap it in <check_in> tags. For example: "<check_in>Completed initial research on design patterns.</check_in>"
     
     Keep your responses concise, practical and focused on helping the user make progress towards completing their initiative.
     Important - your default response length is under 30 words. Don't make it larger if not asked about deep advice.
@@ -116,15 +123,6 @@ export const streamChatResponse = async (
     const messageContent = typeof message === 'string' 
       ? [{ type: 'text', text: message }] as MessageContent[]
       : message;
-    
-    // Add current message to history
-    const fullHistory = [
-      ...history,
-      { 
-        role: 'user', 
-        content: typeof message === 'string' ? message : 'Message with attachments' 
-      }
-    ];
     
     // Prepare messages array for OpenAI
     const messages: ChatCompletionMessageParam[] = [
@@ -157,72 +155,33 @@ export const streamChatResponse = async (
       content: messageContent
     } as ChatCompletionUserMessageParam);
     
-    // Check if we should use streaming (only for text-only messages)
-    const shouldStream = typeof message === 'string';
+    // Call OpenAI streaming API
+    const stream = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: messages,
+      stream: true,
+      temperature: 0.7,
+      max_tokens: 1000,
+    });
     
-    if (shouldStream) {
-      // Call OpenAI streaming API
-      const stream = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: messages,
-        stream: true,
-        temperature: 0.7,
-        max_tokens: 1000,
-      });
-      
-      // Process the stream
-      let fullResponse = '';
-      for await (const chunk of stream) {
-        if (chunk.choices[0]?.delta?.content) {
-          const content = chunk.choices[0].delta.content;
-          fullResponse += content;
-          onChunk(content);
-        }
+    // Process the stream
+    let fullResponse = '';
+    for await (const chunk of stream) {
+      if (chunk.choices[0]?.delta?.content) {
+        const content = chunk.choices[0].delta.content;
+        fullResponse += content;
+        onChunk(content);
       }
-      
-      // Check if there are check-in suggestions
-      const checkInRegex = /<check_in>(.*?)<\/check_in>/g;
-      const hasCheckIn = checkInRegex.test(fullResponse);
-      
-      // Reset regex state (as it's stateful)
-      checkInRegex.lastIndex = 0;
-      
-      // Clean response by removing the actual check-in tags in the response
-      // but remember that we have them
-      const cleanedResponse = fullResponse.replace(checkInRegex, '$1');
-      
-      return {
-        fullResponse: cleanedResponse,
-        hasCheckIn
-      };
-    } else {
-      // For messages with image attachments, use non-streaming API
-      onChunk('Processing message with attachments...');
-      
-      const response = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: messages,
-        temperature: 0.7,
-        max_tokens: 1000,
-      });
-      
-      const responseContent = response.choices[0]?.message?.content || '';
-      
-      // Check for check-in suggestions
-      const checkInRegex = /<check_in>(.*?)<\/check_in>/g;
-      const hasCheckIn = checkInRegex.test(responseContent);
-      
-      // Reset regex state
-      checkInRegex.lastIndex = 0;
-      
-      // Clean response
-      const cleanedResponse = responseContent.replace(checkInRegex, '$1');
-      
-      return {
-        fullResponse: cleanedResponse,
-        hasCheckIn
-      };
     }
+    
+    const checkIns = extractCheckIns(fullResponse);
+    const cleanedResponse = fullResponse.replace('<check_in>', '').replace('</check_in>', '');
+    
+    return {
+      fullResponse: cleanedResponse,
+      checkIns: checkIns,
+      hasCheckIn: checkIns.length > 0
+    };
   } catch (error) {
     console.error('Error in streaming chat response:', error);
     throw error;

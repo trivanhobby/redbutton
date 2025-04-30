@@ -76,11 +76,21 @@ export const getOpenAI = (): OpenAI | null => {
   return openai;
 };
 
-const defaultSuggestions = [
-  'Take a deep breath and count to 10',
-  'Write down what you are feeling right now',
-  'Drink a glass of water and stretch',
-]
+// Define a new interface for suggestions with related goals/initiatives
+export interface EnhancedSuggestion {
+  text: string;
+  relatedItem?: {
+    id: string;
+    type: 'goal' | 'initiative';
+    name: string;
+  };
+}
+
+const defaultSuggestions: EnhancedSuggestion[] = [
+  { text: 'Take a deep breath and count to 10' },
+  { text: 'Write down what you are feeling right now' },
+  { text: 'Drink a glass of water and stretch' },
+];
 
 // Helper function to format goals with initiatives and check-ins
 const formatGoalsWithDetails = (
@@ -105,7 +115,7 @@ const formatGoalsWithDetails = (
           .filter(checkIn => checkIn.entityId === initiative.id && checkIn.entityType === 'initiative')
           .map(checkIn => `    - Check-in (${new Date(checkIn.timestamp).toLocaleDateString()}): ${checkIn.content}`);
         
-        const initiativeStr = `  - Initiative: ${initiative.text}`;
+        const initiativeStr = `  - Initiative: ${initiative.text} (ID: ${initiative.id})`;
         
         if (initiativeCheckIns.length > 0) {
           return initiativeStr + '\n' + initiativeCheckIns.join('\n');
@@ -118,7 +128,7 @@ const formatGoalsWithDetails = (
       .filter(checkIn => checkIn.entityId === goal.id && checkIn.entityType === 'goal')
       .map(checkIn => `  - Check-in (${new Date(checkIn.timestamp).toLocaleDateString()}): ${checkIn.content}`);
     
-    let goalString = `Goal: ${goal.text}`;
+    let goalString = `Goal: ${goal.text} (ID: ${goal.id})`;
     
     if (goal.description) {
       goalString += `\n  Description: ${goal.description}`;
@@ -136,20 +146,47 @@ const formatGoalsWithDetails = (
   }).join('\n\n');
 };
 
+// Gets suggestions for a given emotion and time availability
+export const getSuggestionsForEmotion = async (
+  emotionId: string,
+  availableMinutes: number = 10,
+  data: AppData
+): Promise<EnhancedSuggestion[]> => {
+  try {
+    // Find the emotion in the data
+    const emotion = data.emotions.find(e => e.id === emotionId);
+    
+    if (!emotion) {
+      console.error('Emotion not found with ID:', emotionId);
+      return defaultSuggestions;
+    }
+    
+    // Get recent journal entries (last 5)
+    const recentEntries = data.journalEntries
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 5);
+    
+    // Generate and return suggestions
+    return await generateSuggestions(emotion, availableMinutes, data, recentEntries);
+  } catch (error) {
+    console.error('Error getting suggestions for emotion:', error);
+    return defaultSuggestions;
+  }
+};
+
 // This function generates suggestions based on the user's emotional state and goals
 export const generateSuggestions = async (
   emotion: Emotion,
   availableMinutes: number,
   data: AppData,
   recentJournalEntries: JournalEntry[]
-): Promise<string[]> => {
+): Promise<EnhancedSuggestion[]> => {
   if (!openai) {
     return defaultSuggestions;
   }
 
   try {
     // Get all data from localStorage for complete context
-    
     const goals = data.goals;
     const initiatives = data.initiatives;
     const checkIns = data.checkIns;
@@ -182,14 +219,15 @@ export const generateSuggestions = async (
     4. Consider their check-ins for context of what they're working on
     5. Sensitive to their emotional state
     
+    For EACH suggestion, if it directly relates to a specific goal or initiative, mention the ID in the format [RELATED_TO: <goal_id>] or [RELATED_TO: <initiative_id>]. Prefer linking to initiatives over goals when possible.
+    
     Provide only the suggestions, each on a new line. Be concise and practical.
 
-    Note 1: Suggestions ARE alternatives - so each should use all the timeframe. 
+    Note 1: Suggestions ARE alternatives - so each should use all the timeframe. (if you have free 60 minutes - suggest 2-3 things each of them requiring 60 minutes)
     Note 2: For negative emotions prioritize suggestions on feeling better and addressing concerns while not contradicting the goals. For positive emotions prioritize suggestions on leveraging the momentum and making progress towards the goals, choosing next step.
     `;
-
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: 'You are a compassionate productivity assistant that helps people take mindful action based on their emotional state.' },
         { role: 'user', content: prompt }
@@ -198,13 +236,51 @@ export const generateSuggestions = async (
       max_tokens: 350,
     });
 
-    const suggestions = response.choices[0].message.content
+    const rawSuggestions = response.choices[0].message.content
       ?.split('\n')
       .filter(line => line.trim().length > 0)
       .map(line => line.replace(/^[0-9-. ]+/, '').trim())
-      .slice(0, 3);
+      .slice(0, 3) || [];
     
-    return suggestions || defaultSuggestions;
+    // Parse suggestions to extract related goals/initiatives
+    const enhancedSuggestions: EnhancedSuggestion[] = rawSuggestions.map(suggestion => {
+      const relatedMatch = suggestion.match(/\[RELATED_TO:\s*(\w+)\]/i);
+      
+      if (relatedMatch && relatedMatch[1]) {
+        const relatedId = relatedMatch[1];
+        // Check if this is a goal ID
+        const relatedGoal = goals.find(g => g.id === relatedId);
+        if (relatedGoal) {
+          return {
+            text: suggestion.replace(/\[RELATED_TO:\s*\w+\]/i, '').trim(),
+            relatedItem: {
+              id: relatedId,
+              type: 'goal',
+              name: relatedGoal.text
+            }
+          };
+        }
+        
+        // Check if this is an initiative ID
+        const relatedInitiative = initiatives.find(i => i.id === relatedId);
+        if (relatedInitiative) {
+          const parentGoal = goals.find(g => g.id === relatedInitiative.goalId);
+          return {
+            text: suggestion.replace(/\[RELATED_TO:\s*\w+\]/i, '').trim(),
+            relatedItem: {
+              id: relatedId,
+              type: 'initiative',
+              name: relatedInitiative.text + (parentGoal ? ` (${parentGoal.text})` : '')
+            }
+          };
+        }
+      }
+      
+      // No related item found or no match
+      return { text: suggestion };
+    });
+    
+    return enhancedSuggestions.length > 0 ? enhancedSuggestions : defaultSuggestions;
   } catch (error) {
     console.error('Failed to generate suggestions:', error);
     return defaultSuggestions;
@@ -249,12 +325,12 @@ export const generateJournalTemplate = async (
     ${formattedGoals}
     ===
     Create a helpful journal template with:
-    3-5 questions to reflect on, considering their goals, initiatives, check-ins, and emotions. Keep it short and not too hard to fill.
+    3-5 questions to reflect on, considering their goals, initiatives, check-ins, and emotions and previous journal entries (that's most important!). Keep it short and not too hard to fill.
     For questions use regular text, for placeholders of what should be filled use <>.
 
     Keep the tone supportive, thoughtful, and introspective.
-    Format the template using Markdown, with headers, bullet points, and sections.
     The template should be ready to use - the user will just need to fill in the blanks.
+    Don't use any formatting, just use regular text, no markdown or sections.
     `;
 
     const response = await openai.chat.completions.create({
@@ -304,7 +380,7 @@ export const polishJournalEntry = async (
     `;
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4o-mini',
       messages: [
         { 
           role: 'system', 

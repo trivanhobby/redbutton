@@ -12,6 +12,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   hasCheckIn?: boolean;
+  checkIns?: string[];
   timestamp: string;
   attachments?: Attachment[];
 }
@@ -245,19 +246,24 @@ const CrackItModal: React.FC<CrackItModalProps> = ({ goal, initiative, onClose }
       // Add note about file attachments if present
       const fileAttachments = userMessage.attachments?.filter(att => att.type !== 'image' && att.fileId);
       if (fileAttachments && fileAttachments.length > 0 && inputMessage.trim()) {
-        messageContent.push({
-          type: "text",
-          text: "\n\n[Files attached to this message]"
-        });
+        for (const file of fileAttachments) {
+          if (file.fileId) {
+            messageContent.push({
+              type: "file",
+              file: { file_id: file.fileId }
+            });
+          }
+        }
       }
       
       // Use the streamChatResponse function that now supports images
-      const { fullResponse, hasCheckIn } = await streamChatResponse(
+      const { fullResponse, checkIns, hasCheckIn } = await streamChatResponse(
         context,
         conversationHistory,
         messageContent,
         (chunk) => {
-          setStreamedResponse(prev => prev + chunk);
+          const cleanedChunk = chunk.replace('<check_in>', '').replace('</check_in>', '');
+          setStreamedResponse(prev => prev + cleanedChunk);
         }
       );
       
@@ -268,6 +274,7 @@ const CrackItModal: React.FC<CrackItModalProps> = ({ goal, initiative, onClose }
           id: `msg_${Date.now()}`,
           role: 'assistant',
           content: fullResponse,
+          checkIns: checkIns,
           hasCheckIn: hasCheckIn,
           timestamp: new Date().toISOString(),
         }

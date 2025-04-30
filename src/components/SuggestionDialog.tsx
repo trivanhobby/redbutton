@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useData, Emotion, EmotionRecord, JournalEntry } from '../context/DataContext';
-import { generateSuggestions } from '../utils/ai';
+import { getSuggestionsForEmotion, EnhancedSuggestion } from '../utils/ai';
 import ActionSuggestions from './widgets/ActionSuggestions';
 import { format } from 'date-fns';
 
@@ -16,15 +16,24 @@ interface EmotionData {
   action?: string;
 }
 
+// Timer status for IPC communication
+export interface TimerStatus {
+  isRunning: boolean;
+  remainingSeconds: number;
+  totalMinutes: number;
+  activity: string;
+  emotionName: string;
+}
+
 const SuggestionDialog: React.FC = () => {
   const navigate = useNavigate();
-  const { data, addEmotionToJournal, updateJournalEntry } = useData();
+  const { data, addEmotionToJournal, updateJournalEntry, addCheckIn } = useData();
   
   // State for emotion data received from the menu bar
   const [emotionData, setEmotionData] = useState<EmotionData | null>(null);
   
   // States for suggestions
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<EnhancedSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState<string | null>(null);
   const [showSuggestions, setShowSuggestions] = useState<boolean>(false);
@@ -76,37 +85,20 @@ const SuggestionDialog: React.FC = () => {
     setIsLoading(true);
     
     try {
-      // Find the full emotion object
-      const emotion = data.emotions.find(e => e.id === emotionData.id);
+      // Use getSuggestionsForEmotion which returns enhanced suggestions with relatedItem information
+      const generatedSuggestions = await getSuggestionsForEmotion(
+        emotionData.id,
+        emotionData.time || 10,
+        data
+      );
       
-      if (emotion) {
-        // Get recent journal entries (last 5)
-        const recentEntries = data.journalEntries
-          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-          .slice(0, 5);
-        
-        // Generate suggestions based on emotion, time, goals, and journal entries
-        const generatedSuggestions = await generateSuggestions(
-          emotion,
-          emotionData.time || 10,
-          data,
-          recentEntries
-        );
-        
-        setSuggestions(generatedSuggestions);
-      } else {
-        setSuggestions([
-          'Take a deep breath and count to 10',
-          'Write down what you are feeling right now',
-          'Drink a glass of water and stretch',
-        ]);
-      }
+      setSuggestions(generatedSuggestions);
     } catch (error) {
       console.error('Error generating suggestions:', error);
       setSuggestions([
-        'Take a deep breath and count to 10',
-        'Write down what you are feeling right now',
-        'Drink a glass of water and stretch',
+        { text: 'Take a deep breath and count to 10' },
+        { text: 'Write down what you are feeling right now' },
+        { text: 'Drink a glass of water and stretch' },
       ]);
     } finally {
       setIsLoading(false);
@@ -114,18 +106,37 @@ const SuggestionDialog: React.FC = () => {
   };
 
   // Handle selecting a suggestion
-  const handleSuggestionSelect = (suggestion: string) => {
-    setSelectedSuggestion(suggestion === selectedSuggestion ? null : suggestion);
-    console.log("handle", selectedSuggestion, journalEntryId, emotionData, initialEmotionTimestamp)
-    if (suggestion && journalEntryId && emotionData && initialEmotionTimestamp) {
+  const handleSuggestionSelect = (suggestion: EnhancedSuggestion) => {
+    const suggestionText = suggestion.text;
+    setSelectedSuggestion(suggestionText === selectedSuggestion ? null : suggestionText);
+    
+    if (suggestionText && journalEntryId && emotionData && initialEmotionTimestamp) {
       // Find the current journal entry
-      var record = data.journalEntries.find(entry => entry.id === journalEntryId)
+      const record = data.journalEntries.find(entry => entry.id === journalEntryId);
       if (record) {
-        var emotion = record.emotionRecords[record.emotionRecords.length - 1]
+        const emotion = record.emotionRecords[record.emotionRecords.length - 1];
         if (emotion) {
-          emotion.suggestionSelected = suggestion
+          emotion.suggestionSelected = suggestionText;
           updateJournalEntry(journalEntryId, record.content);
-          console.log(record)
+          
+          // If the suggestion is related to a goal or initiative, add a check-in
+          if (suggestion.relatedItem) {
+            const now = new Date();
+            const formattedDate = format(now, 'MMMM do, yyyy');
+            const formattedTime = format(now, 'h:mm a');
+            
+            // Create a check-in with the suggestion text and emotion context
+            const checkInContent = `${suggestionText} (Selected when feeling ${emotionData.name})`;
+            
+            // Add the check-in to the related goal or initiative
+            addCheckIn(
+              checkInContent,
+              suggestion.relatedItem.id,
+              suggestion.relatedItem.type
+            );
+            
+            console.log(`Added check-in for ${suggestion.relatedItem.type} "${suggestion.relatedItem.name}"`);
+          }
         }
       }
     }
@@ -135,6 +146,41 @@ const SuggestionDialog: React.FC = () => {
   const handleMoreSuggestions = async () => {
     if (emotionData) {
       await loadSuggestions(emotionData);
+    }
+  };
+
+  // Handle starting a timer for the selected suggestion
+  const handleStartTimer = () => {
+    if (selectedSuggestion && emotionData) {
+      const duration = emotionData.time || 10;
+      console.log(`Initiating timer for ${duration} minutes with activity: "${selectedSuggestion}"`);
+      
+      // Create timer status object
+      const timerStatus: TimerStatus = {
+        isRunning: true,
+        remainingSeconds: duration * 60,
+        totalMinutes: duration,
+        activity: selectedSuggestion,
+        emotionName: emotionData.name
+      };
+      
+      // Tell the main process to start the timer
+      if (window.electron) {
+        window.electron.startTimer(timerStatus);
+        console.log(`Sent timer request to main process: ${duration} minutes for "${selectedSuggestion}"`);
+        
+        // Listen for a one-time timer-started event as confirmation
+        const handleTimerStarted = (event: Event) => {
+          console.log('Timer started confirmation received');
+          document.removeEventListener('timer-started', handleTimerStarted);
+        };
+        document.addEventListener('timer-started', handleTimerStarted);
+      } else {
+        console.error('Electron API not available, cannot start timer');
+      }
+      
+      // Close the dialog
+      handleCloseDialog();
     }
   };
 
@@ -206,12 +252,32 @@ const SuggestionDialog: React.FC = () => {
           >
             I want more
           </button>
-          <button
-            onClick={handleOpenApp}
-            className="py-2.5 px-4 bg-primary text-white rounded-md hover:bg-opacity-90 transition-colors"
-          >
-            {selectedSuggestion ? "Let's do!" : "Thank you"}
-          </button>
+          
+          {selectedSuggestion ? (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={handleStartTimer}
+                className="py-2.5 px-2 bg-primary text-white rounded-md hover:bg-opacity-90 transition-colors flex items-center justify-center"
+                disabled={!selectedSuggestion}
+                title={`Timer for ${emotionData?.time || 10} minutes`}
+              >
+                <span className="text-sm sm:text-base whitespace-nowrap">⏱️ Run Timer!</span>
+              </button>
+              <button
+                onClick={handleOpenApp}
+                className="py-2.5 px-2 bg-primary text-white rounded-md hover:bg-opacity-90 transition-colors"
+              >
+                <span className="text-sm sm:text-base">Let's do!</span>
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleOpenApp}
+              className="py-2.5 px-4 bg-primary text-white rounded-md hover:bg-opacity-90 transition-colors"
+            >
+              Thank you
+            </button>
+          )}
         </div>
       </motion.div>
     </motion.div>

@@ -16,6 +16,7 @@ import WidgetPage from './pages/WidgetPage';
 
 // Components
 import SuggestionDialog from './components/SuggestionDialog';
+import TimerStatusBar from './components/TimerStatusBar';
 
 const App: React.FC = () => {
   const location = useLocation();
@@ -49,6 +50,9 @@ const App: React.FC = () => {
 
   return (
     <>
+      {/* Timer status bar that appears at the top of the app when a timer is active */}
+      <TimerStatusBar />
+      
       <motion.div 
         className="app-container bg-background"
         initial={{ opacity: 0 }}

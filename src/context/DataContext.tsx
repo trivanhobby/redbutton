@@ -333,7 +333,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       ...emotion,
       id: `e${Date.now()}`,
     };
-    console.log("NEW EMOTION", newEmotion);
     setData((prev) => ({
       ...prev,
       emotions: [...prev.emotions, newEmotion],
