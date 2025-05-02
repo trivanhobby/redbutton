@@ -61,7 +61,7 @@ const formatGoalsWithDetails = (
     const goalCheckIns = checkIns.filter(c => c.entityId === goal.id && c.entityType === 'goal');
     
     // Add the goal
-    formattedGoals += `GOAL: ${goal.text}\n`;
+    formattedGoals += `GOAL: ID: ${goal.id} - ${goal.text}\n`;
     if (goal.description) {
       formattedGoals += `DESCRIPTION: ${goal.description}\n`;
     }
@@ -79,7 +79,7 @@ const formatGoalsWithDetails = (
     if (goalInitiatives.length > 0) {
       formattedGoals += 'INITIATIVES:\n';
       goalInitiatives.forEach(initiative => {
-        formattedGoals += `- ${initiative.text} (${initiative.completed ? 'COMPLETED' : 'IN PROGRESS'})\n`;
+        formattedGoals += `- ID: ${initiative.id} - ${initiative.text} (${initiative.completed ? 'COMPLETED' : 'IN PROGRESS'})\n`;
         
         // Add initiative check-ins
         const initiativeCheckIns = checkIns.filter(c => 
@@ -126,16 +126,28 @@ export const getSuggestionsForEmotion = async (
     // Add action context for positive emotions
     if (isPositive && action) {
       if (action === 'celebrate') {
-        prompt += ` I want to celebrate this positive feeling.`;
+        prompt += ` I want to have at least one proposal that will allow me to celebrate this feeling.`;
       } else if (action === 'plan') {
-        prompt += ` I want to build on this feeling by planning my next steps.`;
+        prompt += ` I want you to help me to identify a next step.`;
       }
     }
     
     // Complete the prompt with goals context
-    prompt += `\n\nHere are my current goals and initiatives:\n${goalsText}`;
-    prompt += `\nGiven my current state and goals, what are 3 specific actions I could take in the next ${availableMinutes} minutes?`;
-    
+    prompt += `\n\nHere are my current goals and initiatives:\n${goalsText}
+    Given my current state and goals, what are 3 specific actions I could take in the next ${availableMinutes} minutes?
+
+    I want your actions to be 
+    - very specific and brief. (for example: "let's go running for 30 minutes" is a good initiatve, but "Set a Micro-Goal (Professional Growth): Take 3 minutes to jot down one small, actionable step you can take toward your professional growth" - not so good. it is too abstract )
+    - exactly fit to the available time
+    - look at the goals, initiatives and check-ins (CONSIDERING IT's DATES - that's what user choose!) AND
+      - try to balance between the goals - to not prioritize one goal over the others
+      - propose actions that are about different goals
+      - combine some very straightforwards actions (for example: "let's go running for 30 minutes") with more abstract & complex ones 
+
+    OUTPUT FORMAT NOTES:
+    - each action should be in a new line. No multiline actions. (but line could be a bit longer than 100 characters)
+    - if action relevant to specific goal or to specific initiative, follow the format: <id>: <action_text>
+    `;    
     // Call OpenAI API
     const response = await ai.chat.completions.create({
       model: API_CONFIG_FULL.defaultModel,
@@ -155,10 +167,7 @@ export const getSuggestionsForEmotion = async (
     
     // Extract and format the suggestions
     const suggestionsText = response.choices[0].message.content || '';
-    let suggestions = parseSuggestions(suggestionsText);
-    
-    // Try to link suggestions to goals or initiatives
-    suggestions = linkSuggestionsToGoals(suggestions, goals, initiatives);
+    let suggestions = processSuggestions(suggestionsText, goals, initiatives);
     
     return suggestions;
   } catch (error) {
@@ -167,50 +176,75 @@ export const getSuggestionsForEmotion = async (
   }
 };
 
-// Parse numbered or bulleted suggestions from text
-const parseSuggestions = (text: string): EnhancedSuggestion[] => {
-  const suggestions: EnhancedSuggestion[] = [];
-  
-  // Match numbered items, bullets, or dashed items
-  const regex = /(\d+\.|•|-)\s*([^.\n]+(?:[^.0-9\n][.][^.\n]+)*)/g;
-  let match;
-  
-  while ((match = regex.exec(text)) !== null) {
-    const suggestion = match[2].trim();
-    if (suggestion) {
-      suggestions.push({ text: suggestion });
-    }
-  }
-  
-  // If no matches were found with the regex, split by new lines
-  if (suggestions.length === 0) {
-    const lines = text.split('\n').filter(line => line.trim() !== '');
-    lines.forEach(line => {
-      const suggestion = line.replace(/^\d+\.\s*/, '').trim();
-      if (suggestion) {
-        suggestions.push({ text: suggestion });
-      }
-    });
-  }
-  
-  return suggestions.length > 0 ? suggestions : [{ text: text.trim() }];
-};
-
-// Link suggestions to goals or initiatives based on text similarity
-const linkSuggestionsToGoals = (
-  suggestions: EnhancedSuggestion[],
+// Extract and process suggestions from text, linking them to goals or initiatives where possible
+const processSuggestions = (
+  text: string,
   goals: Goal[],
   initiatives: Initiative[]
 ): EnhancedSuggestion[] => {
-  return suggestions.map(suggestion => {
-    const text = suggestion.text.toLowerCase();
+  // Split the text by new lines and filter out empty lines
+  const lines = text.split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0);
+  
+  // If no valid lines were found, return a default suggestion
+  if (lines.length === 0) {
+    return [{ text: "Take a few minutes to reflect on your current emotions." }];
+  }
+  
+  // Process each line into a suggestion with potential goal/initiative links
+  return lines.map(line => {
+    // Remove any numbering or bullet points
+    let cleanedLine = line.replace(/^(\d+\.|\*|\-)\s+/, '').trim();
+    
+    // Check if the line has an ID reference in format "<id>: <text>"
+    const idMatch = cleanedLine.match(/^([a-zA-Z0-9]+):\s*(.+)$/);
+    
+    if (idMatch) {
+      // Extract the ID and text
+      const id = idMatch[1];
+      const text = idMatch[2].trim();
+      
+      // Try to find a matching initiative first
+      const initiative = initiatives.find(i => i.id === id);
+      if (initiative) {
+        const goal = goals.find(g => g.id === initiative.goalId);
+        return { 
+          text,
+          relatedItem: {
+            id: initiative.id,
+            type: 'initiative',
+            name: `${initiative.text} (${goal?.text || 'Unknown goal'})`
+          }
+        };
+      }
+      
+      // Then check if it's a goal ID
+      const goal = goals.find(g => g.id === id);
+      if (goal) {
+        return { 
+          text,
+          relatedItem: {
+            id: goal.id,
+            type: 'goal',
+            name: goal.text
+          }
+        };
+      }
+      
+      // If ID doesn't match any goal or initiative, just use the text
+      return { text };
+    }
+    
+    // No ID in the format. Try to find mentions of initiatives or goals in the text
+    const text = cleanedLine.toLowerCase();
     
     // Check initiatives first (more specific)
     for (const initiative of initiatives) {
       if (text.includes(initiative.text.toLowerCase())) {
         const goal = goals.find(g => g.id === initiative.goalId);
         return {
-          ...suggestion,
+          text: cleanedLine,
           relatedItem: {
             id: initiative.id,
             type: 'initiative',
@@ -224,7 +258,7 @@ const linkSuggestionsToGoals = (
     for (const goal of goals) {
       if (text.includes(goal.text.toLowerCase())) {
         return {
-          ...suggestion,
+          text: cleanedLine,
           relatedItem: {
             id: goal.id,
             type: 'goal',
@@ -234,7 +268,8 @@ const linkSuggestionsToGoals = (
       }
     }
     
-    return suggestion;
+    // If no matches found, return just the text
+    return { text: cleanedLine };
   });
 };
 
@@ -385,6 +420,8 @@ export const streamChatResponse = async (
     2. Identify potential obstacles and solutions
     3. Suggest concrete next actions
     4. Provide guidance on how to approach the initiative
+
+    Stay sharp and concise. Stay very practical. If something is not clear to the user, ask for more details.
     
     IMPORTANT: Every message should contain at least one potential improvement for user to take - a potential check-in (progress note) that the user might want to record, wrap it in <check_in> tags. For example: "<check_in>Completed initial research on design patterns.</check_in>"
     

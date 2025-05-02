@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { useData, Emotion, EmotionRecord, JournalEntry } from '../context/DataContext';
-import { getSuggestionsForEmotion, EnhancedSuggestion } from '../utils/ai';
+import { useData, EmotionRecord } from '../context/DataContext';
+import { getSuggestionsForEmotion, EnhancedSuggestion } from '../utils/api';
 import ActionSuggestions from './widgets/ActionSuggestions';
 import { format } from 'date-fns';
 
@@ -89,7 +89,8 @@ const SuggestionDialog: React.FC = () => {
       const generatedSuggestions = await getSuggestionsForEmotion(
         emotionData.id,
         emotionData.time || 10,
-        data
+        data,
+        emotionData.action
       );
       
       setSuggestions(generatedSuggestions);

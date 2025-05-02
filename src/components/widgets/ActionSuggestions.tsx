@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { EnhancedSuggestion } from '../../utils/ai';
+import { EnhancedSuggestion } from '../../utils/api';
 
 interface ActionSuggestionsProps {
   suggestions: EnhancedSuggestion[];

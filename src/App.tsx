@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { initializeOpenAIFromStorage } from './utils/ai';
 import { useData } from './context/DataContext';
 import { useAuth } from './context/AuthContext';
 
@@ -27,24 +26,6 @@ const App: React.FC = () => {
   const location = useLocation();
   const { data, updateSettings } = useData();
   const { isAuthenticated } = useAuth();
-  
-  // Initialize OpenAI with saved API key on app startup
-  useEffect(() => {
-    // Check if we have an environment variable key but no stored key
-    const envApiKey = process.env.REACT_APP_OPENAI_API_KEY;
-    const hasStoredKey = data.settings.apiKey && data.settings.apiKey.trim() !== '';
-    
-    if (envApiKey && !hasStoredKey) {
-      // Save the environment key to the app settings
-      updateSettings({
-        apiKey: envApiKey
-      });
-      console.log('Added OpenAI API key from environment variables');
-    }
-    
-    // Initialize the OpenAI client with whatever key is available
-    const success = initializeOpenAIFromStorage();
-  }, [data.settings.apiKey, updateSettings]);
   
   // Check if we're on the widget route
   const isWidget = location.pathname === '/widget' || location.hash === '#/widget';

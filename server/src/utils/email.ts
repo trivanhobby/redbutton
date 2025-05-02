@@ -29,6 +29,9 @@ export const sendInviteEmail = async (
   inviteUrl: string
 ): Promise<boolean> => {
   try {
+    // Create deeplink URL for the desktop app
+    const desktopInviteUrl = `redbutton://register?token=${inviteToken}`;
+    
     // Email content
     const mailOptions = {
       from: process.env.EMAIL_FROM || 'support@redbutton.app',
@@ -38,9 +41,17 @@ export const sendInviteEmail = async (
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #3E63DD;">Welcome to RedButton!</h2>
           <p>You've been invited to join RedButton, a minimalist assistant application designed to help you react to your inner states.</p>
-          <p>Click the button below to accept your invitation and create your account:</p>
-          <a href="${inviteUrl}" style="display: inline-block; background-color: #3E63DD; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 20px 0;">Accept Invitation</a>
-          <p>This invitation link will expire in 7 days.</p>
+          
+          <h3 style="color: #3E63DD; margin-top: 20px;">For Web Access:</h3>
+          <p>Click the button below to accept your invitation and create your account in your browser:</p>
+          <a href="${inviteUrl}" style="display: inline-block; background-color: #3E63DD; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 20px 0;">Accept Invitation in Browser</a>
+          
+          <h3 style="color: #3E63DD; margin-top: 20px;">For Desktop App Users:</h3>
+          <p>If you have the RedButton desktop application installed, you can click the link below to open the app and register directly:</p>
+          <a href="${desktopInviteUrl}" style="display: inline-block; background-color: #EF4444; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; margin: 20px 0;">Open in RedButton App</a>
+          <p style="font-size: 0.9em; color: #666;">Note: This link will only work if you have already installed the RedButton desktop application.</p>
+          
+          <p>This invitation will expire in 7 days.</p>
           <p>If you have any questions, please contact our support team.</p>
           <p>Thank you,<br>The RedButton Team</p>
         </div>

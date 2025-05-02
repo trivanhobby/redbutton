@@ -10,6 +10,7 @@
     "eject": "react-scripts eject",
     "electron:dev": "concurrently \"cross-env BROWSER=none npm start\" \"wait-on http://localhost:3000 && tsc -p electron/tsconfig.json && electron .\"",
     "electron:build": "npm run build && electron-builder",
+    "electron:build:mac": "cross-env ELECTRON_IS_DEV=0 NODE_ENV=production npm run build && cross-env ELECTRON_IS_DEV=0 NODE_ENV=production electron-builder --mac",
     "postinstall": "electron-builder install-app-deps",
     "generate-icon": "npx svgexport public/assets/menubar-icon.svg public/menubar-icon.png 2x"
   },
@@ -29,12 +30,13 @@
   "bugs": {
     "url": "https://github.com/trivanhobby/redbutton/issues"
   },
-  "homepage": "./calendar",
+  "homepage": "./",
   "dependencies": {
     "@headlessui/react": "^1.7.17",
     "@heroicons/react": "^2.0.18",
     "chart.js": "^4.4.0",
     "date-fns": "^2.30.0",
+    "electron-is-dev": "^2.0.0",
     "framer-motion": "^10.16.4",
     "openai": "^4.12.1",
     "react": "^18.2.0",
@@ -52,7 +54,6 @@
     "cross-env": "^7.0.3",
     "electron": "^27.0.0",
     "electron-builder": "^24.6.4",
-    "electron-is-dev": "^2.0.0",
     "postcss": "^8.4.31",
     "react-scripts": "^5.0.1",
     "svgexport": "^0.4.2",
@@ -62,15 +63,74 @@
   "build": {
     "appId": "com.redbutton.app",
     "productName": "RedButton",
-    "mac": {
-      "category": "public.app-category.productivity"
-    },
+    "extends": null,
     "files": [
       "build/**/*",
-      "node_modules/**/*"
+      "node_modules/**/*",
+      "package.json"
     ],
+    "extraMetadata": {
+      "main": "build/electron/main.js"
+    },
     "directories": {
-      "buildResources": "assets"
+      "buildResources": "build-resources",
+      "output": "dist"
+    },
+    "extraResources": [
+      {
+        "from": "build",
+        "to": "build"
+      },
+      {
+        "from": "public",
+        "to": "public"
+      }
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/electron-is-dev/**/*"
+    ],
+    "afterSign": "build-resources/notarize.js",
+    "publish": null,
+    "mac": {
+      "category": "public.app-category.productivity",
+      "darkModeSupport": true,
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build-resources/entitlements.mac.plist",
+      "entitlementsInherit": "build-resources/entitlements.mac.plist",
+      "icon": "build-resources/icon.png",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "identity": null,
+      "protocols": [
+        {
+          "name": "RedButton Registration Link",
+          "schemes": [
+            "redbutton"
+          ]
+        }
+      ]
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "window": {
+        "width": 540,
+        "height": 380
+      }
     }
   },
   "browserslist": {

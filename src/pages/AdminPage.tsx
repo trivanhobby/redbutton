@@ -5,7 +5,8 @@ const AdminPage: React.FC = () => {
   const [adminSecret, setAdminSecret] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [webInviteLink, setWebInviteLink] = useState<string | null>(null);
+  const [desktopInviteLink, setDesktopInviteLink] = useState<string | null>(null);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   
   const handleGenerateInvite = async (e: React.FormEvent) => {
@@ -18,7 +19,8 @@ const AdminPage: React.FC = () => {
     
     setIsLoading(true);
     setError(null);
-    setInviteLink(null);
+    setWebInviteLink(null);
+    setDesktopInviteLink(null);
     setInviteToken(null);
     
     try {
@@ -38,7 +40,8 @@ const AdminPage: React.FC = () => {
         throw new Error(data.message || 'Failed to generate invite');
       }
       
-      setInviteLink(data.inviteUrl);
+      setWebInviteLink(data.webInviteUrl);
+      setDesktopInviteLink(data.desktopInviteUrl);
       setInviteToken(data.inviteToken);
     } catch (error: any) {
       setError(error.message || 'Error generating invite link');
@@ -58,117 +61,113 @@ const AdminPage: React.FC = () => {
   };
   
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <div className="max-w-lg w-full bg-card shadow-lg rounded-lg p-8">
-        <h1 className="text-2xl font-bold text-white mb-6 text-center">Admin Invite Generator</h1>
-        
-        {error && (
-          <div className="bg-red-900/50 border border-red-800 text-red-200 px-4 py-3 rounded mb-4">
-            {error}
-          </div>
-        )}
-        
-        <form onSubmit={handleGenerateInvite} className="space-y-4">
-          <div>
-            <label htmlFor="email" className="block text-gray-300 mb-1">
-              Email to Invite
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full p-2 bg-gray-800 border border-gray-700 rounded text-white"
-              placeholder="user@example.com"
-              required
-            />
-          </div>
-          
-          <div>
-            <label htmlFor="adminSecret" className="block text-gray-300 mb-1">
-              Admin Secret Key
-            </label>
-            <input
-              id="adminSecret"
-              type="password"
-              value={adminSecret}
-              onChange={(e) => setAdminSecret(e.target.value)}
-              className="w-full p-2 bg-gray-800 border border-gray-700 rounded text-white"
-              placeholder="Enter admin secret key"
-              required
-            />
-          </div>
-          
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full bg-primary hover:bg-opacity-90 text-white py-2 px-4 rounded flex items-center justify-center"
-          >
-            {isLoading ? (
-              <>
-                <span className="animate-spin h-5 w-5 border-t-2 border-white rounded-full mr-2"></span>
-                Generating...
-              </>
-            ) : (
-              'Generate Invite Link'
-            )}
-          </button>
-        </form>
-        
-        {inviteLink && (
-          <div className="mt-8 p-4 bg-gray-800 rounded-md">
-            <h2 className="text-lg font-semibold text-white mb-2">Invitation Generated!</h2>
-            
-            <div className="mb-4">
-              <label className="block text-gray-300 text-sm mb-1">
-                Invite Link:
-              </label>
-              <div className="flex">
-                <input
-                  type="text"
-                  value={inviteLink}
-                  readOnly
-                  className="w-full p-2 bg-gray-900 border border-gray-700 rounded-l text-white text-sm"
-                />
-                <button
-                  onClick={() => copyToClipboard(inviteLink)}
-                  className="bg-gray-700 hover:bg-gray-600 px-3 rounded-r text-white"
-                >
-                  Copy
-                </button>
-              </div>
-            </div>
-            
-            <div>
-              <label className="block text-gray-300 text-sm mb-1">
-                Invite Token:
-              </label>
-              <div className="flex">
-                <input
-                  type="text"
-                  value={inviteToken || ''}
-                  readOnly
-                  className="w-full p-2 bg-gray-900 border border-gray-700 rounded-l text-white text-sm"
-                />
-                <button
-                  onClick={() => copyToClipboard(inviteToken || '')}
-                  className="bg-gray-700 hover:bg-gray-600 px-3 rounded-r text-white"
-                >
-                  Copy
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        <div className="mt-6 text-center text-sm text-gray-400">
-          <p>
-            This tool is for administrators only. The generated link will be valid for 7 days.
-          </p>
+    <div className="p-8 max-w-2xl mx-auto bg-card rounded-lg shadow-lg">
+      <h1 className="text-2xl font-bold mb-6 text-white">Admin - Generate Invitation</h1>
+      
+      <form onSubmit={handleGenerateInvite} className="mb-8">
+        <div className="mb-4">
+          <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
+            Email Address
+          </label>
+          <input
+            type="email"
+            id="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full p-2 border border-gray-700 rounded bg-surface text-white"
+            placeholder="user@example.com"
+            required
+          />
         </div>
-      </div>
+        
+        <div className="mb-6">
+          <label htmlFor="adminSecret" className="block text-sm font-medium text-gray-300 mb-2">
+            Admin Secret Key
+          </label>
+          <input
+            type="password"
+            id="adminSecret"
+            value={adminSecret}
+            onChange={(e) => setAdminSecret(e.target.value)}
+            className="w-full p-2 border border-gray-700 rounded bg-surface text-white"
+            placeholder="Enter admin secret key"
+            required
+          />
+        </div>
+        
+        <button
+          type="submit"
+          disabled={isLoading}
+          className="w-full bg-primary hover:bg-opacity-90 text-white font-medium py-2 px-4 rounded transition"
+        >
+          {isLoading ? 'Generating...' : 'Generate Invite Link'}
+        </button>
+      </form>
+      
+      {error && (
+        <div className="mb-6 p-4 bg-error bg-opacity-20 border border-error rounded-md text-white">
+          {error}
+        </div>
+      )}
+      
+      {webInviteLink && (
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold mb-2 text-white">Web Invitation Link:</h2>
+          <div className="flex items-center">
+            <div className="flex-1 p-3 bg-surface border border-gray-700 rounded-l-md text-white overflow-auto">
+              <p className="text-sm break-all">{webInviteLink}</p>
+            </div>
+            <button
+              onClick={() => copyToClipboard(webInviteLink)}
+              className="bg-primary text-white p-3 rounded-r-md hover:bg-opacity-90"
+              title="Copy to clipboard"
+            >
+              Copy
+            </button>
+          </div>
+          <p className="mt-2 text-gray-400 text-sm">Share this link for browser access</p>
+        </div>
+      )}
+      
+      {desktopInviteLink && (
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold mb-2 text-white">Desktop App Invitation Link:</h2>
+          <div className="flex items-center">
+            <div className="flex-1 p-3 bg-surface border border-gray-700 rounded-l-md text-white overflow-auto">
+              <p className="text-sm break-all">{desktopInviteLink}</p>
+            </div>
+            <button
+              onClick={() => copyToClipboard(desktopInviteLink)}
+              className="bg-redbutton text-white p-3 rounded-r-md hover:bg-opacity-90"
+              title="Copy to clipboard"
+            >
+              Copy
+            </button>
+          </div>
+          <p className="mt-2 text-gray-400 text-sm">Share this link for direct desktop app registration</p>
+        </div>
+      )}
+      
+      {inviteToken && (
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold mb-2 text-white">Invite Token:</h2>
+          <div className="flex items-center">
+            <div className="flex-1 p-3 bg-surface border border-gray-700 rounded-l-md text-white overflow-auto">
+              <p className="text-sm break-all">{inviteToken}</p>
+            </div>
+            <button
+              onClick={() => copyToClipboard(inviteToken)}
+              className="bg-primary text-white p-3 rounded-r-md hover:bg-opacity-90"
+              title="Copy to clipboard"
+            >
+              Copy
+            </button>
+          </div>
+          <p className="mt-2 text-gray-400 text-sm">Token for manual registration</p>
+        </div>
+      )}
     </div>
   );
-};
+}
 
 export default AdminPage; 

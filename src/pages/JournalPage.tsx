@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useData, EmotionRecord } from '../context/DataContext';
 import { format, isToday, parseISO, formatDistanceToNow, subDays } from 'date-fns';
-import { generateJournalTemplate, polishJournalEntry } from '../utils/ai';
+import { generateJournalTemplate, polishJournalEntry } from '../utils/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { fadeInVariants, listItemVariants, containerVariants } from '../utils/animations';
 

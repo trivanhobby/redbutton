@@ -439,16 +439,21 @@ export const generateInviteLink = async (req: Request, res: Response): Promise<v
       userId = newUser._id;
     }
     
-    // Generate invite URL for client
-    const inviteUrl = `${process.env.CLIENT_URL || 'http://localhost:3000'}/register?token=${inviteToken}`;
+    // Generate invite URLs for both web and desktop clients
+    const webInviteUrl = `${process.env.CLIENT_URL || 'redbutton:/'}/register?token=${inviteToken}`;
     
-    // Return the invite URL instead of sending email
+    // Create deeplink URL for the desktop app using the redbutton:// protocol
+    const desktopInviteUrl = `redbutton://register?token=${inviteToken}`;
+    
+    // Return both invite URLs
     res.status(200).json({
       success: true,
       message: 'Invite link generated successfully',
-      inviteUrl,
+      webInviteUrl,
+      desktopInviteUrl,
       inviteToken,
-      userId: userId?.toString()
+      userId: userId?.toString(),
+      instructions: "Send the web link for browser access or the desktop link for direct app opening"
     });
   } catch (error) {
     console.error('Error generating invite:', error);

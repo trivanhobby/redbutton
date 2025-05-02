@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from '../context/DataContext';
-import { initializeOpenAI } from '../utils/ai';
 import { motion } from 'framer-motion';
 
 const SettingsPage: React.FC = () => {
@@ -42,34 +41,6 @@ const SettingsPage: React.FC = () => {
     updateSettings({
       aiEnabled: !data.settings.aiEnabled,
     });
-  };
-  
-  // Handle API key submission
-  const handleApiKeySubmit = async () => {
-    if (apiKey.trim()) {
-      const success = await initializeOpenAI(apiKey.trim());
-      setApiKeyStatus(success ? 'success' : 'error');
-      
-      if (success) {
-        // Save the API key to the app data
-        updateSettings({
-          apiKey: apiKey.trim()
-        });
-        
-        // Clear the input for security after successful save
-        setApiKey('');
-      }
-    }
-  };
-  
-  // Handle API key reset
-  const handleApiKeyReset = () => {
-    if (window.confirm('Are you sure you want to remove your API key?')) {
-      updateSettings({
-        apiKey: ''
-      });
-      setApiKeyStatus('idle');
-    }
   };
   
   // Handle custom emotions toggle

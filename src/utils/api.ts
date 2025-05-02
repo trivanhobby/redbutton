@@ -1,8 +1,14 @@
-import { EmotionRecord, JournalEntry, Emotion } from '../context/DataContext';
-import { EnhancedSuggestion } from './ai';
+import { EmotionRecord, JournalEntry, Emotion, AppData } from '../context/DataContext';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000/api';
-
+export interface EnhancedSuggestion {
+  text: string;
+  relatedItem?: {
+    id: string;
+    type: 'goal' | 'initiative';
+    name: string;
+  };
+}
 // Helper function to get auth token from localStorage
 const getAuthToken = (): string | null => {
   return localStorage.getItem('authToken');
@@ -125,21 +131,29 @@ export const logout = async () => {
 };
 
 // AI Functionality
-export const generateSuggestions = async (
-  emotionId: string, 
-  emotionName: string,
-  isPositive: boolean,
+export const getSuggestionsForEmotion = async (
+  emotionId: string,
   availableMinutes: number = 10,
+  data: AppData,
   action?: string
 ): Promise<EnhancedSuggestion[]> => {
   try {
+    // Find the emotion in the data
+    const emotion = data.emotions.find(e => e.id === emotionId);
+    
+    if (!emotion) {
+      console.error('Emotion not found with ID:', emotionId);
+      return defaultSuggestions;
+    }
+    
+    // Call the backend API directly
     const response = await fetch(`${API_BASE_URL}/ai/suggestions`, {
       method: 'POST',
       headers: createAuthHeaders(),
       body: JSON.stringify({
         emotionId,
-        emotionName,
-        isPositive,
+        emotionName: emotion.name,
+        isPositive: emotion.isPositive,
         availableMinutes,
         action
       }),
@@ -149,24 +163,35 @@ export const generateSuggestions = async (
       throw new Error('Failed to generate suggestions');
     }
     
-    const data = await response.json();
-    return data.suggestions;
+    const responseData = await response.json();
+    return responseData.suggestions;
   } catch (error) {
-    console.error('Error generating suggestions:', error);
-    return [];
+    console.error('Error getting suggestions for emotion:', error);
+    return defaultSuggestions;
   }
 };
 
+// Generate a journal template
 export const generateJournalTemplate = async (
-  emotions: { name: string, isPositive: boolean }[],
+  emotionRecords: any[],
+  data: AppData,
   previousEntries: string[] = []
 ): Promise<string> => {
   try {
+    // Get emotion details from records
+    const emotionDetails = emotionRecords.map(record => {
+      const emotion = data.emotions.find(e => e.id === record.emotionId);
+      return emotion 
+        ? { name: emotion.name, isPositive: emotion.isPositive }
+        : { name: 'Unknown', isPositive: false };
+    });
+    
+    // Call the backend API directly
     const response = await fetch(`${API_BASE_URL}/ai/journal-template`, {
       method: 'POST',
       headers: createAuthHeaders(),
       body: JSON.stringify({
-        emotions,
+        emotions: emotionDetails,
         previousEntries
       }),
     });
@@ -175,16 +200,24 @@ export const generateJournalTemplate = async (
       throw new Error('Failed to generate journal template');
     }
     
-    const data = await response.json();
-    return data.template;
+    const responseData = await response.json();
+    return responseData.template;
   } catch (error) {
-    console.error('Error generating journal template:', error);
-    return '';
+    console.error('Failed to generate journal template:', error);
+    return getDefaultJournalTemplate();
   }
 };
 
-export const polishJournalEntry = async (entryContent: string): Promise<string> => {
+// Polish a journal entry
+export const polishJournalEntry = async (
+  entryContent: string
+): Promise<string> => {
+  if (!entryContent.trim()) {
+    return entryContent;
+  }
+
   try {
+    // Call the backend API directly
     const response = await fetch(`${API_BASE_URL}/ai/polish-entry`, {
       method: 'POST',
       headers: createAuthHeaders(),
@@ -200,7 +233,7 @@ export const polishJournalEntry = async (entryContent: string): Promise<string> 
     const data = await response.json();
     return data.polishedContent;
   } catch (error) {
-    console.error('Error polishing journal entry:', error);
+    console.error('Failed to polish journal entry:', error);
     return entryContent;
   }
 };
@@ -288,3 +321,26 @@ export const addCheckIn = async (content: string, entityId: string, entityType: 
   
   return response.json();
 }; 
+const defaultSuggestions: EnhancedSuggestion[] = [
+  { text: 'Take a deep breath and count to 10' },
+  { text: 'Write down what you are feeling right now' },
+  { text: 'Drink a glass of water and stretch' },
+];
+
+const getDefaultJournalTemplate = (): string => {
+  return `
+# Today's Reflections
+
+## Current Emotions
+_How are you feeling right now? What emotions have you experienced today?_
+
+## Reflection Questions
+- What was the most significant part of your day?
+- What challenged you today, and how did you respond?
+- What are you grateful for right now?
+- What did you learn about yourself today?
+
+## Looking Forward
+_What are your intentions for tomorrow? What do you want to remember or focus on?_
+`;
+};

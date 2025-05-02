@@ -1,11 +1,65 @@
-import { app, BrowserWindow, ipcMain, Tray, nativeImage, Menu, Notification } from 'electron';
+import { app, BrowserWindow, ipcMain, Tray, nativeImage, Notification, Menu } from 'electron';
 import * as path from 'path';
-import * as isDev from 'electron-is-dev';
 import * as fs from 'fs';
+
+// Better isDev detection that works in production builds
+const isDev = process.env.ELECTRON_IS_DEV === '1' || 
+              !(app && app.isPackaged) || 
+              process.env.NODE_ENV === 'development';
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let emotionWindow: BrowserWindow | null = null;
+let deeplinkingUrl: string | null = null;
+let logFilePath: string;
+
+// Setup logging
+function setupLogging() {
+  // Create logs directory in the user's app data folder
+  const userDataPath = app.getPath('userData');
+  const logsDir = path.join(userDataPath, 'logs');
+  
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+  }
+  
+  // Create a new log file for this session
+  const now = new Date();
+  const timestamp = now.toISOString().replace(/:/g, '-').replace(/\..+/, '');
+  logFilePath = path.join(logsDir, `redbutton-${timestamp}.log`);
+  
+  // Log startup info
+  logToFile(`RedButton App Starting at ${now.toISOString()}`);
+  logToFile(`App version: ${app.getVersion()}`);
+  logToFile(`Electron version: ${process.versions.electron}`);
+  logToFile(`Chrome version: ${process.versions.chrome}`);
+  logToFile(`Node version: ${process.versions.node}`);
+  logToFile(`Process architecture: ${process.arch}`);
+  logToFile(`Process platform: ${process.platform}`);
+  logToFile(`Process path: ${app.getAppPath()}`);
+  logToFile(`User data path: ${userDataPath}`);
+  logToFile(`Is development mode: ${isDev}`);
+  logToFile(`Is packaged: ${app.isPackaged}`);
+  logToFile(`ELECTRON_IS_DEV env var: ${process.env.ELECTRON_IS_DEV}`);
+  logToFile(`NODE_ENV: ${process.env.NODE_ENV}`);
+  logToFile(`Log file: ${logFilePath}`);
+}
+
+// Log to file and console
+function logToFile(message: string) {
+  const timestamp = new Date().toISOString();
+  const logMessage = `[${timestamp}] ${message}\n`;
+  
+  // Log to console
+  console.log(message);
+  
+  // Log to file
+  try {
+    fs.appendFileSync(logFilePath, logMessage);
+  } catch (error) {
+    console.error('Failed to write to log file:', error);
+  }
+}
 
 // Timer related variables
 interface TimerStatus {
@@ -37,7 +91,131 @@ const TIMER_SOUND_PATH = path.join(
 // Store the original click handler
 let originalTrayClickHandler: Function | null = null;
 
+// Register protocol handler for macOS
+if (process.platform === 'darwin') {
+  app.setAsDefaultProtocolClient('redbutton');
+}
+
+// Handle macOS deep linking
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  deeplinkingUrl = url;
+  logToFile(`Received deep link URL: ${url}`);
+  
+  // If the app is already running, handle the URL now
+  if (mainWindow) {
+    handleDeepLink(url);
+  }
+});
+
+// Handle the deep link URL
+function handleDeepLink(url: string | string[]) {
+  if (!mainWindow) {
+    logToFile('Cannot handle deep link: Main window is null');
+    return;
+  }
+
+  // If url is an array (process.argv), look for our protocol URL
+  let actualUrl: string | null = null;
+  
+  if (Array.isArray(url)) {
+    logToFile(`Searching for deep link in args array (${url.length} items)`);
+    // Look for protocol link in command line arguments
+    for (const arg of url) {
+      if (arg.startsWith('redbutton://') || arg.includes('localhost:3000')) {
+        actualUrl = arg;
+        logToFile(`Found deeplink URL in args: ${actualUrl}`);
+        break;
+      }
+    }
+    
+    if (!actualUrl) {
+      logToFile(`No deep link found in args: ${url.join(', ')}`);
+      return;
+    }
+  } else {
+    // Url is already a string
+    actualUrl = url;
+  }
+
+  // Parse the URL to extract the token
+  // URL format: redbutton://register?token=TOKEN_VALUE
+  // or http://localhost:3000/register?token=TOKEN_VALUE
+  try {
+    const urlObj = new URL(actualUrl);
+    const token = urlObj.searchParams.get('token');
+    const isRegister = actualUrl.includes('/register') || urlObj.pathname.includes('register');
+
+    logToFile(`Parsing deep link - token: ${token ? token.substring(0, 5) + '...' : 'null'}, isRegister: ${isRegister}`);
+
+    if (token && isRegister) {
+      // Show and focus the main window
+      mainWindow.show();
+      mainWindow.focus();
+      
+      // Load the registration page with the token
+      let registerUrl;
+      
+      if (isDev) {
+        // In development, use the webpack dev server
+        registerUrl = `http://localhost:3000/register?token=${token}`;
+        logToFile(`Using development server for deeplink: ${registerUrl.replace(token, token.substring(0, 5) + '...')}`);
+      } else {
+        // In production, find the correct path to index.html
+        let indexPath = '';
+        const possiblePaths = [
+          path.join(__dirname, '../build/index.html'),
+          path.join(process.resourcesPath, 'build/index.html'),
+          path.join(app.getAppPath(), 'build/index.html'),
+          path.join(app.getPath('exe'), '../Resources/build/index.html'),
+        ];
+
+        logToFile('Checking possible paths for index.html for deeplink:');
+        for (const testPath of possiblePaths) {
+          logToFile(`- Trying: ${testPath}`);
+          try {
+            if (fs.existsSync(testPath)) {
+              indexPath = testPath;
+              logToFile(`✓ Found index.html at: ${indexPath} for deeplink`);
+              break;
+            }
+          } catch (error) {
+            logToFile(`Error checking path ${testPath}: ${error}`);
+          }
+        }
+
+        if (indexPath) {
+          // Use the found path with the register route and token
+          registerUrl = `file://${indexPath}#/register?token=${token}`;
+          logToFile(`Using file URL for deeplink with hash routing: ${registerUrl.replace(token, token.substring(0, 5) + '...')}`);
+        } else {
+          logToFile('ERROR: Could not find index.html for deeplink in any of the expected locations');
+          registerUrl = `data:text/html,<html><body><h1>Error: Could not find application files for registration</h1><p>Please reinstall the application.</p></body></html>`;
+        }
+      }
+      
+      // Load the URL with a short timeout to ensure everything is initialized properly
+      setTimeout(() => {
+        if (mainWindow) {
+          logToFile(`Actually loading deeplink URL: ${registerUrl.replace(token, token.substring(0, 5) + '...')}`);
+          mainWindow.loadURL(registerUrl).catch(err => {
+            logToFile(`Error loading deeplink URL: ${err}`);
+          });
+        } else {
+          logToFile('Error: mainWindow is null when trying to load deeplink URL');
+        }
+      }, 100);
+    } else {
+      logToFile('Deep link did not contain valid token or registration path');
+    }
+  } catch (error) {
+    logToFile(`Failed to parse deep link URL: ${error}, URL: ${actualUrl}`);
+  }
+}
+
 function createWindow() {
+  logToFile('Creating main window');
+  
   // Create the browser window
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -51,45 +229,185 @@ function createWindow() {
     },
     titleBarStyle: 'hiddenInset', // For macOS style
     icon: path.join(__dirname, '../public/logo512.png'),
+    show: false, // Don't show until content is loaded
   });
 
-  // Load the app
-  const startUrl = isDev
-    ? 'http://localhost:3000'
-    : `file://${path.join(__dirname, '../build/index.html')}`;
-
-  mainWindow.loadURL(startUrl);
-
-  // Open DevTools in development
+  // Determine the correct path to the index.html file
+  let startUrl;
   if (isDev) {
-    mainWindow.webContents.openDevTools();
+    // In development, use the webpack dev server
+    startUrl = 'http://localhost:3000';
+    logToFile(`Using development server URL: ${startUrl}`);
+  } else {
+    // In production, check multiple possible paths for the built index.html file
+    let indexPath = '';
+    const possiblePaths = [
+      path.join(__dirname, '../build/index.html'),
+      path.join(process.resourcesPath, 'build/index.html'),
+      path.join(app.getAppPath(), 'build/index.html'),
+      path.join(app.getPath('exe'), '../Resources/build/index.html'),
+    ];
+
+    logToFile('Checking possible paths for index.html:');
+    for (const testPath of possiblePaths) {
+      logToFile(`- Trying: ${testPath}`);
+      try {
+        if (fs.existsSync(testPath)) {
+          indexPath = testPath;
+          logToFile(`✓ Found index.html at: ${indexPath}`);
+          break;
+        }
+      } catch (error) {
+        logToFile(`Error checking path ${testPath}: ${error}`);
+      }
+    }
+
+    if (indexPath) {
+      // In production, use the local file path with proper URI encoding
+      startUrl = `file://${indexPath}`;
+      // Add hash to ensure the HashRouter works correctly
+      if (!startUrl.includes('#')) {
+        startUrl = `${startUrl}#/`;
+      }
+      logToFile(`Using file URL for production with hash routing: ${startUrl}`);
+    } else {
+      logToFile('ERROR: Could not find index.html in any of the expected locations');
+      startUrl = `data:text/html,<html><body><h1>Error: Could not find application files</h1><p>Please reinstall the application.</p></body></html>`;
+    }
   }
 
+  logToFile(`Loading app from: ${startUrl}`);
+  logToFile(`Current directory: ${__dirname}`);
+  logToFile(`App path: ${app.getAppPath()}`);
+  logToFile(`Resources path: ${process.resourcesPath}`);
+  logToFile(`Is development mode: ${isDev}`);
+
+  // Show window when ready
+  mainWindow.once('ready-to-show', () => {
+    if (mainWindow) {
+      mainWindow.show();
+      logToFile('Main window shown');
+    }
+  });
+
+  // Listen for console logs from renderer process
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    const levelStr = level === 0 ? 'INFO' : level === 1 ? 'WARN' : level === 2 ? 'ERROR' : 'DEBUG';
+    logToFile(`[Renderer ${levelStr}]: ${message}`);
+  });
+
+  // Handle window load errors with more detailed information
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    logToFile(`Failed to load app window: ${errorCode} ${errorDescription} (URL: ${validatedURL})`);
+    
+    // Try to load a simple HTML page as a fallback in production
+    if (!isDev && mainWindow) {
+      const errorHtml = `
+        <html>
+          <head>
+            <title>RedButton - Error</title>
+            <style>
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                padding: 20px;
+                background: #111827;
+                color: white;
+                line-height: 1.5;
+              }
+              h1 { color: #f43f5e; }
+              pre {
+                background: #1F2937;
+                padding: 15px;
+                border-radius: 4px;
+                overflow: auto;
+                max-width: 100%;
+                font-size: 13px;
+              }
+              .info { 
+                margin-top: 20px;
+                border-top: 1px solid #374151;
+                padding-top: 15px;
+              }
+            </style>
+          </head>
+          <body>
+            <h1>Failed to load the application</h1>
+            <p>Error: ${errorDescription} (${errorCode})</p>
+            <p>URL: ${validatedURL}</p>
+            <p>Please try restarting the application.</p>
+            <div class="info">
+              <p><strong>Diagnostic Information:</strong></p>
+              <pre>
+App path: ${app.getAppPath()}
+Resource path: ${process.resourcesPath}
+Current directory: ${__dirname}
+Is dev: ${isDev}
+ELECTRON_IS_DEV: ${process.env.ELECTRON_IS_DEV}
+NODE_ENV: ${process.env.NODE_ENV}
+Platform: ${process.platform}
+Arch: ${process.arch}
+              </pre>
+              <p>Check the logs at: ${logFilePath}</p>
+            </div>
+          </body>
+        </html>
+      `;
+      logToFile('Loading error page as fallback');
+      mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(errorHtml)}`);
+    }
+  });
+
+  // Load the URL with a short timeout to ensure everything is initialized properly
+  setTimeout(() => {
+    if (mainWindow) {
+      logToFile(`Actually loading URL: ${startUrl}`);
+      mainWindow.loadURL(startUrl).catch(err => {
+        logToFile(`Error loading URL: ${err}`);
+      });
+    } else {
+      logToFile('Error: mainWindow is null when trying to load URL');
+    }
+  }, 100);
+
+  // Enable DevTools in all environments for troubleshooting
+  mainWindow.webContents.on('devtools-opened', () => {
+    const devToolsOpened = new Date().toISOString();
+    logToFile(`DevTools opened at ${devToolsOpened} - keeping open for debugging purposes`);
+  });
+
   mainWindow.on('closed', () => {
+    logToFile('Main window closed');
     mainWindow = null;
   });
   
   // Handle page refreshes by detecting when the main window is reloaded
   mainWindow.webContents.on('did-finish-load', () => {
+    logToFile('Main window finished loading');
+    
     // If a timer is running, send the current status to the newly loaded page
     if (timerStatus.isRunning && timerInterval) {
-      console.log('Page refreshed while timer running, syncing timer status');
+      logToFile('Page refreshed while timer running, syncing timer status');
       setTimeout(() => {
         if (mainWindow) {
           mainWindow.webContents.send('timer-update', timerStatus);
-          console.log('Re-sent timer status after page reload');
+          logToFile('Re-sent timer status after page reload');
         }
       }, 1000); // Small delay to ensure renderer is ready
     }
   });
 
-  // Create the menu bar widget if it doesn't exist
-  if (!tray) {
-    createMenuBarWidget();
-  }
+  // NOTE: Widget creation is now handled in the app.whenReady() handler
 }
 
 function createMenuBarWidget() {
+  // Check if we already have a tray icon to prevent duplicates
+  if (tray) {
+    logToFile('Menu bar widget already exists, skipping creation');
+    return;
+  }
+  
+  logToFile('Creating menu bar widget');
+  
   // Create a hidden window for the emotion popup
   emotionWindow = new BrowserWindow({
     width: 350,
@@ -108,30 +426,149 @@ function createMenuBarWidget() {
     },
   });
 
-  const startUrl = isDev
-    ? 'http://localhost:3000/#/widget'
-    : `file://${path.join(__dirname, '../build/index.html#/widget')}`;
+  // Determine the correct URL for the widget
+  let widgetUrl;
+  let indexPath = '';
+  
+  if (isDev) {
+    widgetUrl = 'http://localhost:3000/#/widget';
+    logToFile(`Using development widget URL: ${widgetUrl}`);
+  } else {
+    // Find the index.html file using the same logic as for the main window
+    const possiblePaths = [
+      path.join(__dirname, '../build/index.html'),
+      path.join(process.resourcesPath, 'build/index.html'),
+      path.join(app.getAppPath(), 'build/index.html'),
+      path.join(app.getPath('exe'), '../Resources/build/index.html'),
+    ];
 
-  emotionWindow.loadURL(startUrl);
+    logToFile('Checking possible paths for widget index.html:');
+    for (const testPath of possiblePaths) {
+      try {
+        if (fs.existsSync(testPath)) {
+          indexPath = testPath;
+          logToFile(`Found widget index.html at: ${indexPath}`);
+          break;
+        }
+      } catch (error) {
+        logToFile(`Error checking widget path ${testPath}: ${error}`);
+      }
+    }
+
+    if (indexPath) {
+      // Important: Use hash routing in the URL
+      widgetUrl = `file://${indexPath}#/widget`;
+      logToFile(`Using widget URL with hash routing: ${widgetUrl}`);
+    } else {
+      logToFile('ERROR: Could not find index.html for widget');
+      widgetUrl = `data:text/html,<html><body><h1>Error: Could not find widget files</h1></body></html>`;
+    }
+  }
+
+  logToFile(`Loading widget from: ${widgetUrl}`);
+
+  // Listen for console logs from widget window
+  emotionWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    const levelStr = level === 0 ? 'INFO' : level === 1 ? 'WARN' : level === 2 ? 'ERROR' : 'DEBUG';
+    logToFile(`[Widget ${levelStr}]: ${message}`);
+  });
+
+  // Handle window load errors
+  emotionWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    logToFile(`Failed to load widget window: ${errorCode} ${errorDescription}`);
+  });
+
+  // Load the widget with error handling
+  if (emotionWindow) {
+    emotionWindow.loadURL(widgetUrl).catch(err => {
+      logToFile(`Error loading widget URL: ${err}`);
+      
+      // Try a fallback approach if loading fails
+      const fallbackHtml = `
+        <html>
+          <head>
+            <title>RedButton Widget</title>
+            <style>
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: transparent;
+                color: white;
+                text-align: center;
+                padding: 20px;
+              }
+            </style>
+          </head>
+          <body>
+            <h3>Widget Failed to Load</h3>
+            <p>Please restart the application</p>
+          </body>
+        </html>
+      `;
+      
+      if (emotionWindow) {
+        emotionWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(fallbackHtml)}`);
+      }
+    });
+  } else {
+    logToFile('Error: emotionWindow is null when trying to load URL');
+  }
+
+  // In development, enable DevTools
+  if (isDev) {
+    emotionWindow.webContents.on('did-finish-load', () => {
+      if (emotionWindow) {
+        logToFile('Opened DevTools for widget (development mode)');
+      }
+    });
+  }
 
   // In development, public folder is at project root
   // In production, public files are copied to build folder
   const publicPath = isDev 
     ? path.join(__dirname, '../../public/')
-    : path.join(__dirname, '../public/');
+    : path.join(process.resourcesPath, 'public/');
   
-  let trayIcon = nativeImage.createFromPath(path.join(publicPath, 'menubar-icon.png'));
+  logToFile(`Using public path: ${publicPath}`);
+  
+  const menubarIconPath = path.join(publicPath, 'menubar-icon.png');
+  logToFile(`Looking for menubar icon at: ${menubarIconPath}`);
+  
+  let trayIcon;
+  try {
+    trayIcon = nativeImage.createFromPath(menubarIconPath);
+    if (trayIcon.isEmpty()) {
+      logToFile('Loaded tray icon is empty, trying fallback location');
+      const fallbackPath = path.join(__dirname, '../public/menubar-icon.png');
+      logToFile(`Trying fallback path: ${fallbackPath}`);
+      trayIcon = nativeImage.createFromPath(fallbackPath);
+      
+      if (trayIcon.isEmpty()) {
+        logToFile('Fallback tray icon is also empty, using default icon');
+      } else {
+        logToFile('Successfully loaded fallback tray icon');
+      }
+    } else {
+      logToFile('Successfully loaded tray icon');
+    }
+  } catch (error) {
+    logToFile(`Error loading tray icon: ${error}`);
+    // Create a default icon as fallback
+    trayIcon = nativeImage.createEmpty();
+  }
+  
   // Store the original icon for later
-  originalTrayIcon = trayIcon.resize({ width: 22, height: 22 });
+  originalTrayIcon = trayIcon.isEmpty() ? trayIcon : trayIcon.resize({ width: 22, height: 22 });
   
   // Create the tray icon
   tray = new Tray(originalTrayIcon);
   tray.setToolTip('RedButton');
+  logToFile('Tray icon created');
 
   // We'll position the window above the tray icon when clicked
   tray.on('click', (event, bounds) => {
     if (emotionWindow && emotionWindow.isVisible()) {
       emotionWindow.hide();
+      logToFile('Hiding emotion window on tray click');
     } else if (emotionWindow) {
       const { x, y } = bounds;
       
@@ -146,6 +583,7 @@ function createMenuBarWidget() {
       
       emotionWindow.show();
       emotionWindow.focus();
+      logToFile('Showing emotion window on tray click');
     }
   });
 
@@ -153,6 +591,7 @@ function createMenuBarWidget() {
   emotionWindow.on('blur', () => {
     if (emotionWindow) {
       emotionWindow.hide();
+      logToFile('Hiding emotion window on blur');
     }
   });
 
@@ -583,25 +1022,138 @@ function resetTrayIcon() {
   }
 }
 
-app.on('ready', createWindow);
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
+// Handle app ready
+app.whenReady().then(async () => {
+  // First set up logging to capture all events
+  setupLogging();
+  logToFile('App ready event fired');
+  
+  // Create the main window first
+  createWindow();
+  
+  // Then create the menu bar widget - never do this more than once
+  if (!tray) {
+    createMenuBarWidget();
   }
+  
+  // Set up IPC handlers last
+  setupIPC();
+
+  // Check command line arguments for deep links (Windows)
+  logToFile(`Checking command line args for deep links: ${process.argv.join(', ')}`);
+  handleDeepLink(process.argv);
+
+  app.on('activate', () => {
+    logToFile('Activate event fired');
+    // On macOS it's common to re-create a window in the app when the
+    // dock icon is clicked and there are no other windows open.
+    if (BrowserWindow.getAllWindows().length === 0) {
+      logToFile('No windows found, creating new window');
+      createWindow();
+    } else {
+      logToFile(`Windows exist (count: ${BrowserWindow.getAllWindows().length}), focusing existing window`);
+      if (mainWindow) {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    }
+  });
+
+  // Handle the open-url event for deep linking (macOS)
+  app.on('open-url', (event, url) => {
+    event.preventDefault();
+    logToFile(`open-url event with URL: ${url}`);
+    handleDeepLink([url]);
+  });
+}).catch(error => {
+  logToFile(`Error during app startup: ${error}`);
 });
 
-app.on('activate', () => {
-  if (mainWindow === null) {
-    createWindow();
-  }
-});
-
-// Clean up resources before quitting
+// Handle app will-quit
 app.on('will-quit', () => {
-  stopTimer();
-  stopFlashingIcon();
+  logToFile('will-quit event fired');
+  if (tray) {
+    tray.destroy();
+    logToFile('Tray destroyed');
+  }
 });
+
+// Quit when all windows are closed, except on macOS.
+app.on('window-all-closed', () => {
+  logToFile('window-all-closed event fired');
+  if (process.platform !== 'darwin') {
+    logToFile('Not on macOS, quitting app');
+    app.quit();
+  } else {
+    logToFile('On macOS, app remains running');
+  }
+});
+
+// Setup IPC handlers
+function setupIPC() {
+  logToFile('Setting up IPC handlers');
+
+  // Handle setting the tray icon to the emotion image
+  ipcMain.on('set-emotion-image', (_event, base64Image: string) => {
+    logToFile('Received set-emotion-image IPC request');
+    try {
+      if (!base64Image || !tray) {
+        logToFile('Invalid emotion image or tray not initialized');
+        return;
+      }
+
+      // Create image from base64
+      const imageBuffer = Buffer.from(base64Image.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+      const image = nativeImage.createFromBuffer(imageBuffer);
+      
+      // Resize for tray icon
+      const resizedImage = image.resize({ width: 22, height: 22 });
+      
+      // Set as tray icon
+      if (tray) {
+        tray.setImage(resizedImage);
+        logToFile('Tray icon updated with emotion image');
+      } else {
+        logToFile('Tray is not initialized, cannot update icon');
+      }
+    } catch (error) {
+      logToFile(`Error setting emotion image: ${error}`);
+    }
+  });
+
+  // Handle resetting the tray icon back to the original
+  ipcMain.on('reset-emotion-image', () => {
+    logToFile('Received reset-emotion-image IPC request');
+    try {
+      if (tray && originalTrayIcon) {
+        tray.setImage(originalTrayIcon);
+        logToFile('Tray icon reset to original');
+      } else {
+        logToFile('Tray or original icon not initialized, cannot reset');
+      }
+    } catch (error) {
+      logToFile(`Error resetting emotion image: ${error}`);
+    }
+  });
+
+  // Handle the open-window request
+  ipcMain.on('open-window', () => {
+    logToFile('Received open-window IPC request');
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+        logToFile('Main window restored from minimized state');
+      }
+      mainWindow.show();
+      mainWindow.focus();
+      logToFile('Main window shown and focused');
+    } else {
+      logToFile('Main window is not initialized, cannot open');
+      createWindow(); // Try to recreate the window if it doesn't exist
+      logToFile('Attempted to recreate the main window');
+    }
+  });
+}
 
 // IPC handlers
 ipcMain.handle('save-data', async (event, data) => {
