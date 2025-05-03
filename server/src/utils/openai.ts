@@ -198,12 +198,12 @@ const processSuggestions = (
     let cleanedLine = line.replace(/^(\d+\.|\*|\-)\s+/, '').trim();
     
     // Check if the line has an ID reference in format "<id>: <text>"
-    const idMatch = cleanedLine.match(/^([a-zA-Z0-9]+):\s*(.+)$/);
+    const idMatch = cleanedLine.split(':');
     
-    if (idMatch) {
+    if (idMatch.length === 2) {
       // Extract the ID and text
-      const id = idMatch[1];
-      const text = idMatch[2].trim();
+      const id = idMatch[0];
+      const text = idMatch[1].trim();
       
       // Try to find a matching initiative first
       const initiative = initiatives.find(i => i.id === id);
@@ -276,24 +276,35 @@ const processSuggestions = (
 // Generate journal template based on emotions
 export const generateJournalTemplate = async (
   emotions: { name: string, isPositive: boolean }[],
-  previousEntries: string[] = []
+  previousEntries: string[] = [],
+  goals: Goal[] = [],
+  initiatives: Initiative[] = [],
+  checkIns: CheckIn[] = []
 ): Promise<string> => {
   try {
     const ai = ensureOpenAI();
     
     // Prepare emotions for the prompt
     const emotionsText = emotions.map(e => `${e.name} (${e.isPositive ? 'positive' : 'negative'})`).join(', ');
-    
+    const goalsText = formatGoalsWithDetails(goals, initiatives, checkIns);
     // Prepare previous entries context (limit to recent entries to save tokens)
     const recentEntries = previousEntries.slice(0, 2).join('\n\n');
     
     const prompt = `
-      I experienced these emotions today: ${emotionsText}.
-      ${recentEntries ? `\n\nHere are my most recent journal entries:\n${recentEntries}` : ''}
-      
+      === TASK ===
       Create a thoughtful journal template for today that helps me reflect on these emotions.
       Include 3-5 specific questions or prompts to guide my reflection.
-      Keep the template concise and focused on my emotional experience.
+      Keep it plaintext only. Only questions to answer (or reference to some TODAY's updates like check-ins)
+      Today is ${new Date().toLocaleDateString()}.
+
+      === CONTEXT ===
+      I experienced these emotions today: ${emotionsText}.
+      ${recentEntries ? `\n\nHere are my most recent journal entries:\n${recentEntries}` : ''}
+      ${goalsText ? `\n\nHere are my current goals and initiatives:\n${goalsText}` : ''}
+
+      === OUTPUT FORMAT ===
+      Plaintext only. Numbered list of questions.
+      I allow to add 1 inspirational quote at the end related to today's emotions and updates..
     `;
     
     // Call OpenAI API
@@ -470,8 +481,7 @@ export const streamChatResponse = async (
     }
     
     const checkIns = extractCheckIns(fullResponse);
-    const cleanedResponse = fullResponse.replace(/<check_in>/g, '').replace(/<\/check_in>/g, '');
-    
+    const cleanedResponse = fullResponse.replace('<check_in>', '').replace('</check_in>', '');
     return {
       fullResponse: cleanedResponse,
       checkIns: checkIns,

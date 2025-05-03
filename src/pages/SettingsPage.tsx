@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from '../context/DataContext';
 import { motion } from 'framer-motion';
+import EmojiPicker, { Theme } from 'emoji-picker-react';
+import { syncDataToServer, syncDataFromServer } from '../utils/syncData';
 
 const SettingsPage: React.FC = () => {
   const { data, updateSettings, addEmotion, removeEmotion } = useData();
@@ -8,6 +10,11 @@ const SettingsPage: React.FC = () => {
   const [apiKeyStatus, setApiKeyStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [newEmotion, setNewEmotion] = useState({ name: '', isPositive: true, emoji: '' });
   const [isKeyFromEnv, setIsKeyFromEnv] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
+  const [syncMessage, setSyncMessage] = useState('');
+  const [showSyncToast, setShowSyncToast] = useState(false);
   
   // Set the initial input value based on whether a key exists
   useEffect(() => {
@@ -24,6 +31,10 @@ const SettingsPage: React.FC = () => {
         setIsKeyFromEnv(true);
       }
     }
+    
+    // Get the last sync time
+    const timestamp = localStorage.getItem('lastSyncTimestamp');
+    setLastSyncTime(timestamp);
   }, [data.settings.apiKey]);
   
   // Handle theme toggle
@@ -93,48 +104,138 @@ const SettingsPage: React.FC = () => {
     }
   };
 
+  // Handle manual sync
+  const handleManualSync = async () => {
+    setSyncStatus('syncing');
+    
+    try {
+      // First sync from server to get the latest data
+      const serverData = await syncDataFromServer();
+      
+      if (serverData) {
+        // Then sync local data to server
+        const success = await syncDataToServer(data);
+        
+        if (success) {
+          setSyncStatus('success');
+          setSyncMessage('Data synchronized successfully!');
+          // Update the last sync time display
+          const timestamp = localStorage.getItem('lastSyncTimestamp');
+          setLastSyncTime(timestamp);
+        } else {
+          setSyncStatus('error');
+          setSyncMessage('Error synchronizing with server. Please try again.');
+        }
+      } else {
+        // If we couldn't get server data, try to push local data
+        const success = await syncDataToServer(data);
+        
+        if (success) {
+          setSyncStatus('success');
+          setSyncMessage('Local data synchronized to server.');
+          // Update the last sync time display
+          const timestamp = localStorage.getItem('lastSyncTimestamp');
+          setLastSyncTime(timestamp);
+        } else {
+          setSyncStatus('error');
+          setSyncMessage('Error connecting to server. Please try again later.');
+        }
+      }
+      
+      // Show the toast notification
+      setShowSyncToast(true);
+      // Hide it after 3 seconds
+      setTimeout(() => {
+        setShowSyncToast(false);
+      }, 3000);
+    } catch (error) {
+      console.error('Error during manual sync:', error);
+      setSyncStatus('error');
+      setSyncMessage('Unexpected error during sync. Please try again.');
+      setShowSyncToast(true);
+      setTimeout(() => {
+        setShowSyncToast(false);
+      }, 3000);
+    }
+    
+    // Reset status after a few seconds
+    setTimeout(() => {
+      setSyncStatus('idle');
+    }, 3000);
+  };
+
+  // Format the last sync time for display
+  const getFormattedSyncTime = () => {
+    if (!lastSyncTime) return 'Never';
+    
+    try {
+      const date = new Date(lastSyncTime);
+      return date.toLocaleString();
+    } catch (error) {
+      console.error('Error formatting sync time:', error);
+      return 'Invalid date';
+    }
+  };
+
   return (
-    <div className="max-w-4xl mx-auto text-gray-200">
+    <div className="max-w-4xl mx-auto text-gray-200 relative">
+      {/* Toast Notification */}
+      {showSyncToast && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          className={`fixed top-4 right-4 px-4 py-2 rounded-md shadow-lg z-50 ${
+            syncStatus === 'success' ? 'bg-green-600' : 'bg-red-600'
+          }`}
+        >
+          <p className="text-white font-medium">{syncMessage}</p>
+        </motion.div>
+      )}
+
       <h1 className="text-3xl font-bold mb-6 text-white">Settings</h1>
       
-      {/* General Settings */}
-      <div className="bg-gray-800 rounded-lg shadow-md p-6 mb-8">
-        <h2 className="text-xl font-semibold mb-4 text-white">General Settings</h2>
+      {/* Data Synchronization */}
+      <div className="bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-xl font-semibold mb-4 text-white">Data Synchronization</h2>
         
-        <div className="space-y-4">
-          {/* Theme Toggle */}
-          <div className="flex justify-between items-center">
-            <div>
-              <h3 className="font-medium text-white">Dark Mode</h3>
-              <p className="text-sm text-gray-400">Switch between light and dark theme</p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={data.settings.theme === 'dark'}
-                onChange={handleThemeToggle}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-            </label>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-gray-300">
+              Last synchronized: <span className="font-medium">{getFormattedSyncTime()}</span>
+            </p>
+            <p className="text-sm text-gray-400 mt-1">
+              Your data is automatically synced to the server when you make changes.
+            </p>
           </div>
           
-          {/* AI Assistant Toggle */}
-          <div className="flex justify-between items-center">
-            <div>
-              <h3 className="font-medium text-white">AI Assistant</h3>
-              <p className="text-sm text-gray-400">Enable AI-generated suggestions</p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={data.settings.aiEnabled}
-                onChange={handleAIToggle}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
-            </label>
-          </div>
+          <button
+            onClick={handleManualSync}
+            disabled={syncStatus === 'syncing'}
+            className={`px-4 py-2 rounded-md text-white ${
+              syncStatus === 'syncing' 
+                ? 'bg-blue-600 opacity-70 cursor-wait' 
+                : syncStatus === 'success'
+                ? 'bg-green-600'
+                : syncStatus === 'error'
+                ? 'bg-red-600'
+                : 'bg-blue-600 hover:bg-blue-700'
+            }`}
+          >
+            {syncStatus === 'syncing' 
+              ? 'Syncing...' 
+              : syncStatus === 'success'
+              ? 'Sync Successful'
+              : syncStatus === 'error'
+              ? 'Sync Failed'
+              : 'Sync Now'}
+          </button>
+        </div>
+        
+        <div className="text-sm text-gray-400">
+          <p>
+            Syncing ensures your data is backed up and available across all your devices.
+          </p>
         </div>
       </div>
       
@@ -170,14 +271,32 @@ const SettingsPage: React.FC = () => {
                 onChange={(e) => setNewEmotion({ ...newEmotion, name: e.target.value })}
                 className="flex-1 p-2 border border-gray-600 rounded-md bg-gray-800 text-white"
               />
-              <input
+              <button
+                onClick={() => setShowEmojiPicker(true)}
+                className="w-24 p-2 border border-gray-600 rounded-md bg-gray-800 text-center text-2xl"
+              >
+                {newEmotion.emoji || '😊'}
+              </button>
+              {showEmojiPicker && (
+                <div className="absolute z-50">
+                  <div className="fixed inset-0" onClick={() => setShowEmojiPicker(false)} />
+                  <EmojiPicker
+                    onEmojiClick={(emoji: any) => {
+                      setNewEmotion({ ...newEmotion, emoji: emoji.emoji });
+                      setShowEmojiPicker(false);
+                    }}
+                    theme={Theme.DARK}
+                  />
+                </div>
+              )}
+              {/* <input
                 type="text"
                 placeholder="Emoji (e.g., 😃)"
                 value={newEmotion.emoji}
                 onChange={(e) => setNewEmotion({ ...newEmotion, emoji: e.target.value })}
                 className="w-24 p-2 border border-gray-600 rounded-md bg-gray-800 text-center text-2xl"
                 maxLength={2}
-              />
+              /> */}
               <select
                 value={newEmotion.isPositive ? 'positive' : 'negative'}
                 onChange={(e) => setNewEmotion({ ...newEmotion, isPositive: e.target.value === 'positive' })}
@@ -217,7 +336,7 @@ const SettingsPage: React.FC = () => {
                     <span className="text-2xl">{emotion.emoji}</span>
                     <span>{emotion.name}</span>
                   </div>
-                  {data.settings.customEmotions && !emotion.id.startsWith('e1') && (
+                  {(
                     <button
                       onClick={() => removeEmotion(emotion.id)}
                       className="text-red-400 hover:text-red-300"
@@ -246,7 +365,7 @@ const SettingsPage: React.FC = () => {
                     <span className="text-2xl">{emotion.emoji}</span>
                     <span>{emotion.name}</span>
                   </div>
-                  {data.settings.customEmotions && !emotion.id.startsWith('e1') && (
+                  {(
                     <button
                       onClick={() => removeEmotion(emotion.id)}
                       className="text-red-400 hover:text-red-300"

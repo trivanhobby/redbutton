@@ -20,8 +20,16 @@ const ActionSuggestions: React.FC<ActionSuggestionsProps> = ({
       <h3 className="text-lg font-medium text-gray-200 mb-4">Suggested Actions</h3>
       
       {loading ? (
-        <div className="flex justify-center py-8">
-          <div className="animate-spin rounded-full h-10 w-10 border-2 border-primary border-opacity-50 border-t-primary"></div>
+        <div className="flex flex-col items-center justify-center min-h-[200px] py-8 space-y-3">
+          <div className="relative flex items-center justify-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-primary border-opacity-30">
+              <div className="absolute inset-0 border-4 border-transparent border-t-primary rounded-full animate-pulse"></div>
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-2 h-2 bg-primary rounded-full animate-ping"></div>
+            </div>
+          </div>
+          <p className="text-gray-400 text-sm animate-pulse text-center">Generating suggestions...</p>
         </div>
       ) : suggestions.length > 0 ? (
         <div className="space-y-3">

@@ -43,7 +43,14 @@ const SuggestionDialog: React.FC = () => {
   // Listen for emotion-selected events from the menu bar
   useEffect(() => {
     
-    const handleEmotionSelected = (data: EmotionData) => {
+    const handleEmotionSelected = (data: {
+      id: string, 
+      isPositive: boolean, 
+      name: string, 
+      emoji: string, 
+      time?: number,
+      action?: string
+    }) => {
       console.log('Emotion selected:', data);
       setEmotionData(data);
       setShowSuggestions(true);
@@ -122,10 +129,7 @@ const SuggestionDialog: React.FC = () => {
           
           // If the suggestion is related to a goal or initiative, add a check-in
           if (suggestion.relatedItem) {
-            const now = new Date();
-            const formattedDate = format(now, 'MMMM do, yyyy');
-            const formattedTime = format(now, 'h:mm a');
-            
+            const now = new Date();            
             // Create a check-in with the suggestion text and emotion context
             const checkInContent = `${suggestionText} (Selected when feeling ${emotionData.name})`;
             
@@ -189,7 +193,7 @@ const SuggestionDialog: React.FC = () => {
   const handleOpenApp = () => {
     // Call the electron API to show the main window
     if (window.electron) {
-      window.electron.showMainWindow();
+      window.electron.showMainWindow('journal');
     }
     // Close the dialog
     handleCloseDialog();

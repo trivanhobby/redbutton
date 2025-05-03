@@ -478,4 +478,145 @@ export const addCheckIn = async (req: Request, res: Response): Promise<void> => 
       message: 'Server error adding check-in' 
     });
   }
+};
+
+// Add all user data
+export const updateAllUserData = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?._id;
+    
+    if (!userId) {
+      res.status(401).json({ 
+        success: false, 
+        message: 'Unauthorized' 
+      });
+      return;
+    }
+    
+    const appData = req.body;
+    
+    // Validate that the request body has the expected structure for AppData
+    if (!appData || 
+        !Array.isArray(appData.emotions) || 
+        !Array.isArray(appData.actions) || 
+        !Array.isArray(appData.journalEntries) || 
+        !Array.isArray(appData.goals) || 
+        !Array.isArray(appData.initiatives) || 
+        !Array.isArray(appData.checkIns) || 
+        !appData.settings) {
+      res.status(400).json({ 
+        success: false, 
+        message: 'Invalid user data structure' 
+      });
+      return;
+    }
+    
+    // Update the entire user data document
+    const userData = await UserData.findOneAndUpdate(
+      { userId },
+      { 
+        $set: { 
+          emotions: appData.emotions,
+          actions: appData.actions,
+          journalEntries: appData.journalEntries,
+          goals: appData.goals,
+          initiatives: appData.initiatives,
+          checkIns: appData.checkIns,
+          settings: appData.settings
+        } 
+      },
+      { new: true, upsert: true }
+    );
+    
+    res.status(200).json({
+      success: true,
+      data: userData
+    });
+  } catch (error) {
+    console.error('Error updating all user data:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error updating user data' 
+    });
+  }
+};
+
+// Add sync version with timestamp tracking
+export const syncUserData = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?._id;
+    
+    if (!userId) {
+      res.status(401).json({ 
+        success: false, 
+        message: 'Unauthorized' 
+      });
+      return;
+    }
+    
+    const { clientData, lastSyncTimestamp } = req.body;
+    
+    if (!clientData || !lastSyncTimestamp) {
+      res.status(400).json({
+        success: false,
+        message: 'Client data and last sync timestamp are required'
+      });
+      return;
+    }
+    
+    // Find user data
+    let serverData = await UserData.findOne({ userId });
+    
+    // If no server data exists yet, use client data
+    if (!serverData) {
+      serverData = new UserData({
+        userId,
+        emotions: clientData.emotions || [],
+        actions: clientData.actions || [],
+        journalEntries: clientData.journalEntries || [],
+        goals: clientData.goals || [],
+        initiatives: clientData.initiatives || [],
+        checkIns: clientData.checkIns || [],
+        settings: clientData.settings || {
+          customEmotions: false,
+          theme: 'dark',
+          aiEnabled: true
+        }
+      });
+      
+      await serverData.save();
+      
+      res.status(201).json({
+        success: true,
+        data: serverData,
+        syncTimestamp: new Date().toISOString()
+      });
+      return;
+    }
+    
+    // Merge client and server data (client data gets priority if not empty)
+    serverData.emotions = clientData.emotions?.length ? clientData.emotions : serverData.emotions;
+    serverData.actions = clientData.actions?.length ? clientData.actions : serverData.actions;
+    serverData.journalEntries = clientData.journalEntries?.length ? clientData.journalEntries : serverData.journalEntries;
+    serverData.goals = clientData.goals?.length ? clientData.goals : serverData.goals;
+    serverData.initiatives = clientData.initiatives?.length ? clientData.initiatives : serverData.initiatives;
+    serverData.checkIns = clientData.checkIns?.length ? clientData.checkIns : serverData.checkIns;
+    serverData.settings = {
+      ...serverData.settings,
+      ...(Object.keys(clientData.settings || {}).length ? clientData.settings : {})
+    };
+    await serverData.save();
+    
+    res.status(200).json({
+      success: true,
+      data: serverData,
+      syncTimestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error syncing user data:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error syncing user data' 
+    });
+  }
 }; 

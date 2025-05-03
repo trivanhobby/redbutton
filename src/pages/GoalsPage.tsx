@@ -1,13 +1,54 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useData, Goal, Initiative, CheckIn } from '../context/DataContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { accordionVariants, fadeInVariants, listItemVariants } from '../utils/animations';
 import CrackItModal from '../components/CrackItModal';
+import { Icon } from '@iconify/react';
+import mdiPlus from '@iconify-icons/mdi/plus';
+import mdiMagnify from '@iconify-icons/mdi/magnify';
+import mdiPencil from '@iconify-icons/mdi/pencil';
+import mdiDelete from '@iconify-icons/mdi/delete';
+import mdiChevronUp from '@iconify-icons/mdi/chevron-up';
+import mdiChevronDown from '@iconify-icons/mdi/chevron-down';
+import mdiInformation from '@iconify-icons/mdi/information';
 
 // Helper function to safely access arrays in the data object
 const safeArray = <T,>(arr: T[] | undefined): T[] => {
   return arr || [];
+};
+
+// Helper function to count incomplete initiatives for a goal
+const countIncompleteInitiatives = (
+  goalId: string, 
+  initiatives: Initiative[]
+): number => {
+  return initiatives
+    .filter(initiative => initiative.goalId === goalId && !initiative.completed)
+    .length;
+};
+
+// Helper function to count check-ins for a goal and its initiatives
+const countCheckIns = (
+  goalId: string, 
+  initiatives: Initiative[],
+  checkIns: CheckIn[]
+): number => {
+  // Count goal's own check-ins
+  const goalCheckIns = checkIns.filter(
+    checkIn => checkIn.entityId === goalId && checkIn.entityType === 'goal'
+  ).length;
+  
+  // Count all initiatives' check-ins
+  const initiativeIds = initiatives
+    .filter(initiative => initiative.goalId === goalId)
+    .map(initiative => initiative.id);
+    
+  const initiativeCheckIns = checkIns.filter(
+    checkIn => initiativeIds.includes(checkIn.entityId) && checkIn.entityType === 'initiative'
+  ).length;
+  
+  return goalCheckIns + initiativeCheckIns;
 };
 
 const GoalsPage: React.FC = () => {
@@ -218,11 +259,14 @@ const GoalsPage: React.FC = () => {
     return formatDistanceToNow(parseISO(timestamp), { addSuffix: true });
   };
   
-  // Filter goals based on showCompleted setting
-  const visibleGoals = safeArray(data.goals).filter(goal => 
-    goal.isFixed || !goal.completed || showCompleted
-  );
-  
+  // Filter goals based on showCompleted setting and sort with isFixed last
+  const visibleGoals = safeArray(data.goals)
+    .filter(goal => !goal.completed || showCompleted || goal.isFixed)
+    .sort((a, b) => {
+      if (a.isFixed && !b.isFixed) return 1;
+      if (!a.isFixed && b.isFixed) return -1;
+      return 0;
+    });
   // Group initiatives by goal
   const initiativesByGoal = safeArray(data.initiatives).reduce<Record<string, Initiative[]>>((acc, initiative) => {
     if (!acc[initiative.goalId]) {
@@ -286,7 +330,7 @@ const GoalsPage: React.FC = () => {
               onClick={() => toggleAddCheckIn(entityId, entityType, true)}
               className="text-xs py-1 px-2 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 flex items-center"
             >
-              <span className="mr-1">+</span> Add check-in
+              <Icon icon={mdiPlus} className="mr-1" width="14" height="14" /> Add check-in
             </button>
           </div>
           
@@ -327,10 +371,10 @@ const GoalsPage: React.FC = () => {
                     </button>
                     <button
                       onClick={() => handleAddCheckIn(entityId, entityType)}
-                      className="py-2 px-3 bg-primary text-white text-sm rounded-md hover:bg-opacity-90"
+                      className="py-2 px-3 bg-primary text-white text-sm rounded-md hover:bg-opacity-90 flex items-center justify-center"
                       disabled={!newCheckInTexts[entityId]?.trim()}
                     >
-                      Add
+                      <Icon icon={mdiPlus} width="16" height="16" />
                     </button>
                   </div>
                 </div>
@@ -358,10 +402,10 @@ const GoalsPage: React.FC = () => {
                             removeCheckIn(checkIn.id);
                           }
                         }}
-                        className="text-red-400 hover:text-red-300 text-xs"
+                        className="text-red-400 hover:text-red-300 text-xs flex items-center"
                         title="Delete check-in"
                       >
-                        🗑️
+                        <Icon icon={mdiDelete} width="16" height="16" />
                       </button>
                     </div>
                     <p className="text-gray-200 whitespace-pre-wrap">{checkIn.content}</p>
@@ -412,7 +456,10 @@ const GoalsPage: React.FC = () => {
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
         >
-          <span className="text-xl font-bold">{showAddGoalForm ? "✕" : "+"}</span>
+          {showAddGoalForm ? 
+            <Icon icon={mdiChevronUp} width="24" height="24" /> : 
+            <Icon icon={mdiPlus} width="24" height="24" />
+          }
         </motion.button>
       </div>
       
@@ -449,10 +496,10 @@ const GoalsPage: React.FC = () => {
               <div className="flex justify-end">
                 <button
                   type="submit"
-                  className="py-3 px-6 bg-primary text-white rounded-md hover:bg-opacity-90"
+                  className="py-3 px-6 bg-primary text-white rounded-md hover:bg-opacity-90 flex items-center"
                   disabled={!newGoalText.trim()}
                 >
-                  Add Goal
+                  <Icon icon={mdiPlus} className="mr-2" width="18" height="18" /> Add Goal
                 </button>
               </div>
             </form>
@@ -491,20 +538,35 @@ const GoalsPage: React.FC = () => {
                   />
                 )}
                 <div className="flex-1">
-                  <h3 className={`text-lg font-medium ${goal.completed && !goal.isFixed ? 'line-through text-gray-400' : 'text-white'}`}>
-                    {goal.text}
-                  </h3>
+                  <div className="flex items-center">
+                    <h3 className={`text-lg font-medium ${goal.completed && !goal.isFixed ? 'line-through text-gray-400' : 'text-white'}`}>
+                      {goal.text}
+                    </h3>
+                    
+                    {/* Initiative and Checkin Counts */}
+                    {!goal.completed && (
+                      <div className="flex ml-3 space-x-2">
+                        {countIncompleteInitiatives(goal.id, safeArray(data.initiatives)) > 0 && (
+                          <span className="flex items-center px-2 py-1 text-xs bg-blue-900/50 text-blue-200 rounded-full">
+                            <Icon icon={mdiInformation} className="mr-1" width="14" height="14" />
+                            {countIncompleteInitiatives(goal.id, safeArray(data.initiatives))} tasks
+                          </span>
+                        )}
+                        {countCheckIns(goal.id, safeArray(data.initiatives), safeArray(data.checkIns)) > 0 && (
+                          <span className="flex items-center px-2 py-1 text-xs bg-purple-900/50 text-purple-200 rounded-full">
+                            <Icon icon={mdiMagnify} className="mr-1" width="14" height="14" /> 
+                            {countCheckIns(goal.id, safeArray(data.initiatives), safeArray(data.checkIns))}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   
                   {/* Description displayed on main card */}
                   {goal.description && (
                     <p className="text-gray-400 text-sm mt-1 mr-20">{goal.description}</p>
                   )}
                   
-                  {goal.isFixed && (
-                    <span className="inline-block px-2 py-0.5 text-xs bg-blue-900/30 text-blue-300 rounded-full">
-                      Reserved
-                    </span>
-                  )}
                   {goal.completed && !goal.isFixed && goal.completedAt && (
                     <p className="text-xs text-gray-400 mt-1">
                       Completed {formatTimestamp(goal.completedAt)}
@@ -531,7 +593,7 @@ const GoalsPage: React.FC = () => {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
-                  <span className="text-sm">+</span>
+                  <Icon icon={mdiPlus} width="20" height="20" />
                 </motion.button>
                 
                 <motion.button 
@@ -544,7 +606,7 @@ const GoalsPage: React.FC = () => {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
-                  <span className="text-sm">🔍</span>
+                  <Icon icon={mdiMagnify} width="20" height="20" />
                 </motion.button>
                 
                 {!goal.isFixed && (
@@ -560,7 +622,7 @@ const GoalsPage: React.FC = () => {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                     >
-                      <span className="text-sm">✏️</span>
+                      <Icon icon={mdiPencil} width="20" height="20" />
                     </motion.button>
                     
                     <motion.button
@@ -575,7 +637,7 @@ const GoalsPage: React.FC = () => {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                     >
-                      <span className="text-sm">🗑️</span>
+                      <Icon icon={mdiDelete} width="20" height="20" />
                     </motion.button>
                   </>
                 )}
@@ -589,7 +651,10 @@ const GoalsPage: React.FC = () => {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
-                  {expandedGoals[goal.id] ? '▲' : '▼'}
+                  {expandedGoals[goal.id] ? 
+                    <Icon icon={mdiChevronUp} width="20" height="20" /> : 
+                    <Icon icon={mdiChevronDown} width="20" height="20" />
+                  }
                 </motion.button>
               </div>
             </div>
@@ -667,9 +732,17 @@ const GoalsPage: React.FC = () => {
                                     className="mt-1 h-4 w-4 text-primary rounded bg-gray-600 border-gray-500 focus:ring-primary focus:ring-offset-gray-700"
                                   />
                                   <div className="flex-1">
-                                    <p className={`text-sm ${initiative.completed ? 'line-through text-gray-400' : 'text-gray-200'}`}>
-                                      {initiative.text}
-                                    </p>
+                                    <div className="flex items-center">
+                                      <p className={`text-sm ${initiative.completed ? 'line-through text-gray-400' : 'text-gray-200'}`}>
+                                        {initiative.text}
+                                      </p>
+                                      {!initiative.completed && getCheckInsForEntity(initiative.id, 'initiative').length > 0 && (
+                                        <span className="flex items-center ml-2 px-2 py-0.5 text-xs bg-purple-900/50 text-purple-200 rounded-full">
+                                          <Icon icon={mdiMagnify} className="mr-1" width="12" height="12" /> 
+                                          {getCheckInsForEntity(initiative.id, 'initiative').length}
+                                        </span>
+                                      )}
+                                    </div>
                                     {initiative.completed && initiative.completedAt && (
                                       <p className="text-xs text-gray-500">
                                         Completed {formatTimestamp(initiative.completedAt)}
@@ -693,10 +766,10 @@ const GoalsPage: React.FC = () => {
                                           toggleAddCheckIn(initiative.id, 'initiative', true);
                                         }
                                       }}
-                                      className="text-gray-400 hover:text-gray-200 p-1"
+                                      className="text-gray-400 hover:text-gray-200 p-1 bg-gray-800 rounded-full h-7 w-7 flex items-center justify-center"
                                       title="Check-ins"
                                     >
-                                      <span className="text-sm">🔍</span>
+                                      <Icon icon={mdiMagnify} width="16" height="16" />
                                     </button>
                                     
                                     {/* Crack It button - new */}
@@ -706,10 +779,10 @@ const GoalsPage: React.FC = () => {
                                         // Will implement opening the chat window
                                         handleOpenCrackItChat(goal, initiative);
                                       }}
-                                      className="text-gray-400 hover:text-gray-200 p-1 flex items-center"
+                                      className="text-amber-400 hover:text-amber-300 p-1 bg-gray-800 rounded-full h-7 w-7 flex items-center justify-center"
                                       title="Crack It - Break down this initiative"
                                     >
-                                      <span className="text-sm">💡</span>
+                                      <Icon icon={mdiInformation} width="16" height="16" />
                                     </button>
                                     
                                     <button
@@ -719,10 +792,10 @@ const GoalsPage: React.FC = () => {
                                           removeInitiative(initiative.id);
                                         }
                                       }}
-                                      className="text-red-400 hover:text-red-300 p-1"
+                                      className="text-red-400 hover:text-red-300 p-1 bg-gray-800 rounded-full h-7 w-7 flex items-center justify-center"
                                       title="Delete initiative"
                                     >
-                                      🗑️
+                                      <Icon icon={mdiDelete} width="16" height="16" />
                                     </button>
                                   </div>
                                 </div>
@@ -764,10 +837,10 @@ const GoalsPage: React.FC = () => {
                                           </button>
                                           <button
                                             onClick={() => handleAddCheckIn(initiative.id, 'initiative')}
-                                            className="py-2 px-3 bg-primary text-white text-sm rounded-md hover:bg-opacity-90"
+                                            className="py-2 px-3 bg-primary text-white text-sm rounded-md hover:bg-opacity-90 flex items-center justify-center"
                                             disabled={!newCheckInTexts[initiative.id]?.trim()}
                                           >
-                                            Add
+                                            <Icon icon={mdiPlus} width="16" height="16" />
                                           </button>
                                         </div>
                                       </div>
@@ -796,10 +869,10 @@ const GoalsPage: React.FC = () => {
                           />
                           <button
                             onClick={() => handleAddInitiative(goal.id)}
-                            className="py-2 px-3 bg-primary text-white text-sm rounded-md hover:bg-opacity-90"
+                            className="py-2 px-3 bg-primary text-white text-sm rounded-md hover:bg-opacity-90 flex items-center justify-center"
                             disabled={!newInitiativeTexts[goal.id]?.trim()}
                           >
-                            Add
+                            <Icon icon={mdiPlus} width="18" height="18" />
                           </button>
                         </div>
                       </div>

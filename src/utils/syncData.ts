@@ -1,26 +1,46 @@
 import { AppData } from '../context/DataContext';
 import * as api from './api';
 
+// Get the last sync timestamp from localStorage
+const getLastSyncTimestamp = (): string | null => {
+  return localStorage.getItem('lastSyncTimestamp');
+};
+
+// Set the last sync timestamp in localStorage
+const setLastSyncTimestamp = (timestamp: string): void => {
+  localStorage.setItem('lastSyncTimestamp', timestamp);
+};
+
 // Function to sync data from local storage to the server
 export const syncDataToServer = async (localData: AppData): Promise<boolean> => {
   try {
-    // Get data from the server
-    const serverData = await api.getUserData();
+    console.log('Starting data sync to server...');
     
-    // Check if local data is newer than server data
-    // This is a simplified approach; in a production app, you'd use versioning or timestamps
-    if (!serverData) {
-      // If no server data, upload all local data
-      await uploadAllData(localData);
-      return true;
+    // Get the last sync timestamp
+    const lastSyncTimestamp = getLastSyncTimestamp() || new Date(0).toISOString();
+    
+    try {
+      // Try to use the advanced sync endpoint with conflict resolution
+      const response = await api.syncUserData(localData, lastSyncTimestamp);
+      
+      if (response.success) {
+        console.log('Data synced successfully using conflict resolution');
+        // Update the last sync timestamp
+        setLastSyncTimestamp(response.syncTimestamp);
+        return true;
+      }
+    } catch (syncError) {
+      console.warn('Advanced sync failed, falling back to full data update', syncError);
+      // Fall back to the full data update if advanced sync fails
     }
     
-    // Otherwise, merge data
-    const mergedData = mergeData(localData, serverData);
+    // Fall back to the full data update
+    await uploadAllData(localData);
     
-    // Upload changes
-    await uploadAllData(mergedData);
+    // Set the last sync timestamp to now
+    setLastSyncTimestamp(new Date().toISOString());
     
+    console.log('Data synced successfully using full data update');
     return true;
   } catch (error) {
     console.error('Error syncing data to server:', error);
@@ -31,14 +51,21 @@ export const syncDataToServer = async (localData: AppData): Promise<boolean> => 
 // Function to sync data from the server to local storage
 export const syncDataFromServer = async (): Promise<AppData | null> => {
   try {
-    // Get data from the server
-    const serverData = await api.getUserData();
+    console.log('Starting data sync from server...');
     
-    if (!serverData) {
+    // Get data from the server
+    const response = await api.getUserData();
+    
+    if (!response || !response.success) {
+      console.error('Failed to get user data from server');
       return null;
     }
     
-    return serverData.data;
+    // Update the last sync timestamp
+    setLastSyncTimestamp(new Date().toISOString());
+    
+    console.log('Data retrieved successfully from server');
+    return response.data;
   } catch (error) {
     console.error('Error syncing data from server:', error);
     return null;
@@ -73,16 +100,19 @@ const mergeData = (localData: AppData, serverData: any): AppData => {
 
 // Helper function to upload all data to the server
 const uploadAllData = async (data: AppData): Promise<void> => {
-  // This function would make API calls to update all data on the server
-  // In a real implementation, you'd use individual API endpoints for each data type
-  // For now, we'll assume we have an endpoint to update all data at once
+  console.log('Uploading all data to server...');
   
-  // Example API calls might look like:
-  // await api.updateSettings(data.settings);
-  // await Promise.all(data.goals.map(goal => api.updateGoal(goal.id, goal)));
-  // await Promise.all(data.journalEntries.map(entry => api.updateJournalEntry(entry.id, entry)));
-  // etc.
-  
-  // For this implementation, we'll just log that we would upload the data
-  console.log('Would upload data to server:', data);
+  try {
+    // Actually call the API to update all user data
+    const response = await api.updateAllUserData(data);
+    
+    if (!response || !response.success) {
+      throw new Error('Server returned unsuccessful response');
+    }
+    
+    console.log('All data uploaded successfully to server');
+  } catch (error) {
+    console.error('Failed to upload data to server:', error);
+    throw error; // Re-throw to handle in the calling function
+  }
 }; 

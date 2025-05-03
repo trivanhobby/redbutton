@@ -7,7 +7,9 @@ import {
   addJournalEntry,
   addGoal,
   addInitiative,
-  addCheckIn
+  addCheckIn,
+  updateAllUserData,
+  syncUserData
 } from '../controllers/userdata.controller';
 import { requireAuth } from '../middleware/auth.middleware';
 
@@ -18,6 +20,12 @@ router.use(requireAuth);
 
 // Get all user data
 router.get('/', getUserData);
+
+// Update all user data at once
+router.put('/', updateAllUserData);
+
+// Sync user data with conflict resolution
+router.post('/sync', syncUserData);
 
 // Update user settings
 router.patch('/settings', updateSettings);

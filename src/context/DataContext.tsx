@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { format } from 'date-fns';
+import { syncDataToServer } from '../utils/syncData';
 
 // Types for our data
 export interface Emotion {
@@ -322,10 +323,77 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return initialData;
   });
 
+  // Sync tracking to prevent infinite loops
+  const isSyncing = useRef(false);
+  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isAuthenticated = useRef(!!localStorage.getItem('authToken'));
+
   // Save data to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem('redButtonData', JSON.stringify(data));
+    
+    // Don't sync if we're already syncing or not authenticated
+    if (isSyncing.current || !isAuthenticated.current) {
+      return;
+    }
+    
+    // Debounce sync to server (wait for all changes to settle)
+    if (syncTimeoutRef.current) {
+      clearTimeout(syncTimeoutRef.current);
+    }
+    
+    syncTimeoutRef.current = setTimeout(() => {
+      // Only sync if we're authenticated
+      if (isAuthenticated.current) {
+        isSyncing.current = true;
+        
+        syncDataToServer(data)
+          .then(success => {
+            if (success) {
+              console.log('Data successfully synced to server');
+            } else {
+              console.warn('Failed to sync data to server');
+            }
+          })
+          .catch(error => {
+            console.error('Error syncing data to server:', error);
+          })
+          .finally(() => {
+            isSyncing.current = false;
+          });
+      }
+    }, 2000); // Wait 2 seconds after last change before syncing
+    
+    // Clean up the timeout on unmount
+    return () => {
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
+    };
   }, [data]);
+
+  // Check authentication status on mount and set up listener
+  useEffect(() => {
+    const checkAuth = () => {
+      isAuthenticated.current = !!localStorage.getItem('authToken');
+    };
+    
+    // Initial check
+    checkAuth();
+    
+    // Listen for storage events (auth token changes)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'authToken') {
+        checkAuth();
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
 
   // Functions to manipulate data
   const addEmotion = (emotion: Omit<Emotion, 'id'>) => {

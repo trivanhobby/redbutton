@@ -55,7 +55,7 @@ const App: React.FC = () => {
           {/* Protected routes */}
           <Route element={<PrivateRoute />}>
             <Route path="/" element={<MainLayout />}>
-              <Route index element={<CalendarPage />} />
+              <Route index element={<GoalsPage />} />
               <Route path="calendar" element={<CalendarPage />} />
               <Route path="journal" element={<JournalPage />} />
               <Route path="goals" element={<GoalsPage />} />

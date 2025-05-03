@@ -17,6 +17,12 @@ interface TimerCompletionData {
   emotionName: string;
 }
 
+// Type definitions for the tray icon status
+interface TrayIconStatus {
+  visible: boolean;
+  error?: string;
+}
+
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
 contextBridge.exposeInMainWorld(
@@ -24,7 +30,7 @@ contextBridge.exposeInMainWorld(
   {
     saveData: (data: any) => ipcRenderer.invoke('save-data', data),
     getData: () => ipcRenderer.invoke('get-data'),
-    showMainWindow: () => ipcRenderer.send('show-main-window'),
+    showMainWindow: (page?: string) => ipcRenderer.send('show-main-window', page ),
     selectEmotion: (data: {
       id: string, 
       isPositive: boolean, 
@@ -63,9 +69,11 @@ contextBridge.exposeInMainWorld(
       });
     },
     onTimerUpdate: (callback: (data: TimerStatus) => void) => {
-      ipcRenderer.on('timer-update', (_, data) => callback(data));
+      const subscription = (_: any, data: TimerStatus) => callback(data);
+      ipcRenderer.on('timer-update', subscription);
+      
       return () => {
-        ipcRenderer.removeAllListeners('timer-update');
+        ipcRenderer.removeListener('timer-update', subscription);
       };
     },
     stopTimer: () => {
@@ -73,9 +81,23 @@ contextBridge.exposeInMainWorld(
     },
     // Timer journal entry function
     onTimerJournalEntry: (callback: (data: TimerCompletionData) => void) => {
-      ipcRenderer.on('timer-journal-entry', (_, data) => callback(data));
+      const subscription = (_: any, data: TimerCompletionData) => callback(data);
+      ipcRenderer.on('timer-journal-entry', subscription);
+      
       return () => {
-        ipcRenderer.removeAllListeners('timer-journal-entry');
+        ipcRenderer.removeListener('timer-journal-entry', subscription);
+      };
+    },
+    // Check if tray icon is working
+    checkTrayIconStatus: (): Promise<TrayIconStatus> => ipcRenderer.invoke('check-tray-icon'),
+    // Listen for tray icon status updates
+    onTrayIconStatusUpdate: (callback: (status: TrayIconStatus) => void) => {
+      const subscription = (_: any, status: TrayIconStatus) => callback(status);
+      ipcRenderer.on('tray-icon-status-update', subscription);
+      
+      // Return an unsubscribe function
+      return () => {
+        ipcRenderer.removeListener('tray-icon-status-update', subscription);
       };
     }
   }

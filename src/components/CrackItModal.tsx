@@ -282,8 +282,7 @@ const CrackItModal: React.FC<CrackItModalProps> = ({ goal, initiative, onClose }
         conversationHistory,
         messageContent,
         (chunk) => {
-          const cleanedChunk = chunk.replace('<check_in>', '').replace('</check_in>', '');
-          setStreamedResponse(prev => prev + cleanedChunk);
+          setStreamedResponse(prev => (prev + chunk).replace('<check_in>', '').replace('</check_in>', ''));
         }
       );
       

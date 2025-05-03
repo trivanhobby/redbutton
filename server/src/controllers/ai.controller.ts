@@ -116,8 +116,17 @@ export const createJournalTemplate = async (req: Request, res: Response): Promis
       initializeOpenAI(user.apiKey);
     }
     
+    const userData = await UserData.findOne({ userId });
+    
+    if (!userData) {
+      res.status(404).json({ 
+        success: false, 
+        message: 'User data not found' 
+      });
+      return;
+    }
     // Generate template
-    const template = await generateJournalTemplate(emotions, previousEntries);
+    const template = await generateJournalTemplate(emotions, previousEntries, userData.goals, userData.initiatives, userData.checkIns);
     
     res.status(200).json({
       success: true,

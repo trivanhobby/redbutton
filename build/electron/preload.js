@@ -7,7 +7,7 @@ var electron_1 = require("electron");
 electron_1.contextBridge.exposeInMainWorld('electron', {
     saveData: function (data) { return electron_1.ipcRenderer.invoke('save-data', data); },
     getData: function () { return electron_1.ipcRenderer.invoke('get-data'); },
-    showMainWindow: function () { return electron_1.ipcRenderer.send('show-main-window'); },
+    showMainWindow: function (page) { return electron_1.ipcRenderer.send('show-main-window', page); },
     selectEmotion: function (data) {
         electron_1.ipcRenderer.send('select-emotion', data);
     },
@@ -31,9 +31,10 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
         });
     },
     onTimerUpdate: function (callback) {
-        electron_1.ipcRenderer.on('timer-update', function (_, data) { return callback(data); });
+        var subscription = function (_, data) { return callback(data); };
+        electron_1.ipcRenderer.on('timer-update', subscription);
         return function () {
-            electron_1.ipcRenderer.removeAllListeners('timer-update');
+            electron_1.ipcRenderer.removeListener('timer-update', subscription);
         };
     },
     stopTimer: function () {
@@ -41,9 +42,21 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
     },
     // Timer journal entry function
     onTimerJournalEntry: function (callback) {
-        electron_1.ipcRenderer.on('timer-journal-entry', function (_, data) { return callback(data); });
+        var subscription = function (_, data) { return callback(data); };
+        electron_1.ipcRenderer.on('timer-journal-entry', subscription);
         return function () {
-            electron_1.ipcRenderer.removeAllListeners('timer-journal-entry');
+            electron_1.ipcRenderer.removeListener('timer-journal-entry', subscription);
+        };
+    },
+    // Check if tray icon is working
+    checkTrayIconStatus: function () { return electron_1.ipcRenderer.invoke('check-tray-icon'); },
+    // Listen for tray icon status updates
+    onTrayIconStatusUpdate: function (callback) {
+        var subscription = function (_, status) { return callback(status); };
+        electron_1.ipcRenderer.on('tray-icon-status-update', subscription);
+        // Return an unsubscribe function
+        return function () {
+            electron_1.ipcRenderer.removeListener('tray-icon-status-update', subscription);
         };
     }
 });

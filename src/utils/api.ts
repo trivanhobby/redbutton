@@ -344,3 +344,43 @@ _How are you feeling right now? What emotions have you experienced today?_
 _What are your intentions for tomorrow? What do you want to remember or focus on?_
 `;
 };
+
+// Update all user data at once
+export const updateAllUserData = async (data: AppData): Promise<any> => {
+  const response = await fetch(`${API_BASE_URL}/userdata`, {
+    method: 'PUT',
+    headers: createAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  
+  if (!response.ok) {
+    throw new Error('Failed to update user data');
+  }
+  
+  return response.json();
+};
+
+// Sync user data with conflict resolution
+export const syncUserData = async (
+  clientData: AppData, 
+  lastSyncTimestamp: string
+): Promise<{
+  success: boolean;
+  data: AppData;
+  syncTimestamp: string;
+}> => {
+  const response = await fetch(`${API_BASE_URL}/userdata/sync`, {
+    method: 'POST',
+    headers: createAuthHeaders(),
+    body: JSON.stringify({
+      clientData,
+      lastSyncTimestamp
+    }),
+  });
+  
+  if (!response.ok) {
+    throw new Error('Failed to sync user data');
+  }
+  
+  return response.json();
+};

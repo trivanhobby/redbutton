@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Tray, nativeImage, Notification, Menu } from 'electron';
+import { app, BrowserWindow, ipcMain, Tray, nativeImage, Notification, Menu, screen } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -227,7 +227,7 @@ function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
     },
-    titleBarStyle: 'hiddenInset', // For macOS style
+    // titleBarStyle: 'hiddenInset', // For macOS style
     icon: path.join(__dirname, '../public/logo512.png'),
     show: false, // Don't show until content is loaded
   });
@@ -399,6 +399,49 @@ Arch: ${process.arch}
   // NOTE: Widget creation is now handled in the app.whenReady() handler
 }
 
+// Add this function to check tray icon status
+function checkTrayIconStatus(): { visible: boolean; error?: string } {
+  logToFile('Checking tray icon status');
+  
+  // If tray is null, it hasn't been created yet
+  if (!tray) {
+    logToFile('Tray icon not created yet');
+    return { visible: false, error: 'TRAY_NOT_CREATED' };
+  }
+  
+  try {
+    // Check if the tray icon has bounds (this indicates it's visible in some way)
+    const bounds = tray.getBounds();
+    logToFile('Tray icon bounds: ' + JSON.stringify(bounds));
+    
+    // If the bounds have zero width or height, the icon might not be visible
+    if (bounds.width === 0 || bounds.height === 0) {
+      logToFile('Tray icon has zero width or height');
+      return { visible: false, error: 'TRAY_ZERO_SIZE' };
+    }
+    
+    // On macOS, check if the icon is in the menu bar area
+    if (process.platform === 'darwin') {
+      const primaryDisplay = screen.getPrimaryDisplay();
+      const { x, y } = bounds;
+      
+      // Check if the tray icon is in the top menu bar area (y near 0)
+      if (y > 50) { // If y is significantly below the menu bar
+        logToFile('Tray icon not in expected menu bar position');
+        return { visible: false, error: 'TRAY_POSITION_UNEXPECTED' };
+      }
+    }
+    
+    // Seems to be visible
+    logToFile('Tray icon appears to be visible');
+    return { visible: true };
+    
+  } catch (error) {
+    logToFile('Error checking tray icon status: ' + error);
+    return { visible: false, error: 'TRAY_CHECK_ERROR' };
+  }
+}
+
 function createMenuBarWidget() {
   // Check if we already have a tray icon to prevent duplicates
   if (tray) {
@@ -564,6 +607,15 @@ function createMenuBarWidget() {
   tray.setToolTip('RedButton');
   logToFile('Tray icon created');
 
+  // Check tray icon status and log it
+  const trayStatus = checkTrayIconStatus();
+  logToFile('Initial tray icon status: ' + JSON.stringify(trayStatus));
+  
+  // If the tray icon might not be visible, send notification to the main window
+  if (!trayStatus.visible && mainWindow) {
+    mainWindow.webContents.send('tray-icon-status-update', trayStatus);
+  }
+
   // We'll position the window above the tray icon when clicked
   tray.on('click', (event, bounds) => {
     if (emotionWindow && emotionWindow.isVisible()) {
@@ -596,7 +648,7 @@ function createMenuBarWidget() {
   });
 
   // Handle IPC messages from the emotion window
-  ipcMain.on('show-main-window', () => {
+  ipcMain.on('show-main-window', (event, page?: string) => {
     // If a timer completed, navigate to the journal page
     if (isFlashing) {
       stopFlashingIcon();
@@ -611,7 +663,7 @@ function createMenuBarWidget() {
           minutes: timerStatus.totalMinutes,
           emotionName: timerStatus.emotionName
         });
-        
+
         // On macOS, explicitly bring to front
         if (process.platform === 'darwin') {
           app.dock.show();
@@ -631,6 +683,54 @@ function createMenuBarWidget() {
       if (mainWindow) {
         mainWindow.show();
         mainWindow.focus();
+        
+        // Navigate to specific page if provided
+        if (page) {
+          logToFile(`Navigating to page: ${page}`);
+          
+          // Construct the URL to navigate to
+          let pageUrl;
+          if (isDev) {
+            // In development, use the webpack dev server with hash routing
+            pageUrl = `http://localhost:3000/#/${page}`;
+          } else {
+            // In production, find the index.html path again
+            let indexPath = '';
+            const possiblePaths = [
+              path.join(__dirname, '../build/index.html'),
+              path.join(process.resourcesPath, 'build/index.html'),
+              path.join(app.getAppPath(), 'build/index.html'),
+              path.join(app.getPath('exe'), '../Resources/build/index.html'),
+            ];
+
+            for (const testPath of possiblePaths) {
+              try {
+                if (fs.existsSync(testPath)) {
+                  indexPath = testPath;
+                  break;
+                }
+              } catch (error) {
+                logToFile(`Error checking path while navigating: ${error}`);
+              }
+            }
+
+            if (indexPath) {
+              // Use file URL with hash routing to specific page
+              pageUrl = `file://${indexPath}#/${page}`;
+            } else {
+              logToFile('ERROR: Could not find index.html for navigation');
+              // Fall back to showing the window without navigation
+              pageUrl = null;
+            }
+          }
+          
+          // Navigate to the page if URL was constructed successfully
+          if (pageUrl) {
+            mainWindow.loadURL(pageUrl).catch(err => {
+              logToFile(`Error navigating to page ${page}: ${err}`);
+            });
+          }
+        }
         
         // On macOS, explicitly bring to front
         if (process.platform === 'darwin') {
@@ -1022,6 +1122,33 @@ function resetTrayIcon() {
   }
 }
 
+// Add this function before the app.whenReady() call
+function checkTrayStatusAfterStartup() {
+  // Check tray status after a short delay to allow system to initialize tray icon
+  setTimeout(() => {
+    logToFile('Running scheduled tray icon status check');
+    const status = checkTrayIconStatus();
+    
+    if (!status.visible) {
+      logToFile('Tray icon status check failed: ' + JSON.stringify(status));
+      
+      // If main window exists, send the status
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        logToFile('Sending tray icon status update to main window');
+        mainWindow.webContents.send('tray-icon-status-update', status);
+      }
+      
+      // If emotion window exists, send the status there too
+      if (emotionWindow && !emotionWindow.isDestroyed()) {
+        logToFile('Sending tray icon status update to emotion window');
+        emotionWindow.webContents.send('tray-icon-status-update', status);
+      }
+    } else {
+      logToFile('Tray icon appears to be visible in delayed check');
+    }
+  }, 5000); // Check after 5 seconds
+}
+
 // Handle app ready
 app.whenReady().then(async () => {
   // First set up logging to capture all events
@@ -1064,6 +1191,14 @@ app.whenReady().then(async () => {
     event.preventDefault();
     logToFile(`open-url event with URL: ${url}`);
     handleDeepLink([url]);
+  });
+
+  // Add the tray status check after window creation
+  checkTrayStatusAfterStartup();
+
+  // Add this handler:
+  ipcMain.handle('check-tray-icon', async () => {
+    return checkTrayIconStatus();
   });
 }).catch(error => {
   logToFile(`Error during app startup: ${error}`);
