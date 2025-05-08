@@ -40,6 +40,9 @@ const MainLayout: React.FC = () => {
             <Link to="/settings" className={`py-2 px-1 transition-colors ${isActive('/settings')}`}>
               Settings
             </Link>
+            <Link to="/onboarding-test" className={`py-2 px-1 transition-colors ${isActive('/onboarding-test')}`}>
+              Onboarding Test
+            </Link>
           </nav>
                     
           {/* Mobile menu button */}
@@ -62,13 +65,6 @@ const MainLayout: React.FC = () => {
           <Outlet />
         </motion.div>
       </main>
-      
-      {/* Footer */}
-      <footer className="bg-gray-900 border-t border-gray-800 mt-auto py-4 text-center text-sm text-gray-500">
-        <div className="container mx-auto">
-          RedButton &copy; {new Date().getFullYear()} - Mindful Productivity Assistant
-        </div>
-      </footer>
     </div>
   );
 };

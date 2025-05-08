@@ -12,6 +12,7 @@ import mdiDelete from '@iconify-icons/mdi/delete';
 import mdiChevronUp from '@iconify-icons/mdi/chevron-up';
 import mdiChevronDown from '@iconify-icons/mdi/chevron-down';
 import mdiInformation from '@iconify-icons/mdi/information';
+import OnboardingGoalChat from '../components/onboarding/OnboardingGoalChat';
 
 // Helper function to safely access arrays in the data object
 const safeArray = <T,>(arr: T[] | undefined): T[] => {
@@ -97,6 +98,8 @@ const GoalsPage: React.FC = () => {
     initiative: null,
     isOpen: false
   });
+  
+  const [goalChatId, setGoalChatId] = useState<string | null>(null);
   
   // Toggle showing add goal form
   const toggleAddGoalForm = () => {
@@ -361,6 +364,12 @@ const GoalsPage: React.FC = () => {
                       }));
                     }}
                     autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey && newCheckInTexts[entityId]?.trim()) {
+                        e.preventDefault();
+                        handleAddCheckIn(entityId, entityType);
+                      }
+                    }}
                   />
                   <div className="flex space-x-1">
                     <button
@@ -656,6 +665,18 @@ const GoalsPage: React.FC = () => {
                     <Icon icon={mdiChevronDown} width="20" height="20" />
                   }
                 </motion.button>
+                
+                {/* Crack It for Goal (new) */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setGoalChatId(goal.id);
+                  }}
+                  className="text-amber-400 hover:text-amber-300 p-1 bg-gray-800 rounded-full h-7 w-7 flex items-center justify-center"
+                  title="Crack It - Figure out initiatives for this goal"
+                >
+                  <Icon icon={mdiInformation} width="16" height="16" />
+                </button>
               </div>
             </div>
             
@@ -827,6 +848,12 @@ const GoalsPage: React.FC = () => {
                                             }));
                                           }}
                                           autoFocus
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey && newCheckInTexts[initiative.id]?.trim()) {
+                                              e.preventDefault();
+                                              handleAddCheckIn(initiative.id, 'initiative');
+                                            }
+                                          }}
                                         />
                                         <div className="flex space-x-1">
                                           <button
@@ -866,6 +893,7 @@ const GoalsPage: React.FC = () => {
                               ...prev,
                               [goal.id]: e.target.value
                             }))}
+                            onKeyDown={(e) => {
                           />
                           <button
                             onClick={() => handleAddInitiative(goal.id)}
@@ -897,6 +925,29 @@ const GoalsPage: React.FC = () => {
           initiative={crackItContext.initiative}
           onClose={() => setCrackItContext(prev => ({ ...prev, isOpen: false }))}
         />
+      )}
+      
+      {/* Render the OnboardingGoalChat modal for goal-level chat */}
+      {goalChatId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
+          <div className="bg-gray-950 rounded-xl shadow-2xl w-full max-w-3xl h-[80vh] mx-4 overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center p-4 border-b border-gray-800">
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <span className="text-amber-400">💡</span>
+                <span>Crack It: {data.goals.find(g => g.id === goalChatId)?.text}</span>
+              </h2>
+              <button
+                onClick={() => setGoalChatId(null)}
+                className="text-gray-400 hover:text-gray-200 rounded-full h-8 w-8 flex items-center justify-center hover:bg-gray-800"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex-1">
+              <OnboardingGoalChat selectedGoalId={goalChatId} />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

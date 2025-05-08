@@ -531,4 +531,117 @@ export const uploadFileToOpenAI = async (
     console.error('Error uploading file to OpenAI:', error);
     return null;
   }
+};
+
+export const streamChatCompletion = async (prompt: string): Promise<ReadableStream<Uint8Array>> => {
+  if (!openai) {
+    throw new Error('OpenAI client is not initialized');
+  }
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4',
+    messages: [{ role: 'user', content: prompt }],
+    stream: true,
+  });
+
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      for await (const chunk of response) {
+        const content = chunk.choices[0]?.delta?.content || '';
+        controller.enqueue(encoder.encode(content));
+      }
+      controller.close();
+    },
+  });
+
+  return stream;
+};
+
+export interface ExtractableItem {
+  type: 'goal' | 'initiative';
+  id: string;
+  goalId?: string; // for initiatives
+  text: string;
+}
+
+export const streamOnboardingChatResponse = async (
+  history: ChatMessage[],
+  onChunk: (chunk: { text: string; extractables: ExtractableItem[] }) => void
+): Promise<{ fullResponse: string; extractables: ExtractableItem[] }> => {
+  try {
+    const ai = ensureOpenAI();
+
+    // System prompt for onboarding
+    const systemMessage = `
+You are an AI onboarding assistant for the RedButton app. 
+When you suggest a goal, wrap it as <goal:unique_id>Goal text</goal>.
+When you suggest an initiative, wrap it as <initiative:unique_id on goal_id>Initiative text</initiative>.
+Do not use the same ID twice. 
+Do not include the text inside these tags in the visible message; it will be shown as a button instead.
+`;
+
+    // Prepare messages array
+    const messages: { role: 'system' | 'user' | 'assistant', content: string }[] = [
+      { role: 'system', content: systemMessage }
+    ];
+    for (const msg of history) {
+      messages.push({ role: msg.role, content: msg.content });
+    }
+
+    // Call OpenAI streaming API
+    const stream = await ai.chat.completions.create({
+      model: API_CONFIG_FULL.chatModel,
+      messages,
+      stream: true,
+      temperature: API_CONFIG_FULL.aiLimits.temperature.chat,
+      max_tokens: API_CONFIG_FULL.aiLimits.maxTokens.chat,
+    });
+
+    let fullResponse = '';
+    let extractables: ExtractableItem[] = [];
+
+    for await (const chunk of stream) {
+      if (chunk.choices[0]?.delta?.content) {
+        const content = chunk.choices[0].delta.content;
+        fullResponse += content;
+
+        // Extract goals/initiatives from the current accumulated response
+        const extractableItems: ExtractableItem[] = [];
+        let visibleText = fullResponse;
+
+        // Extract <goal:...>...</goal>
+        const goalRegex = /<goal:([^>]+)>([\s\S]*?)<\/goal>/g;
+        let match;
+        while ((match = goalRegex.exec(fullResponse)) !== null) {
+          extractableItems.push({
+            type: 'goal',
+            id: match[1],
+            text: match[2]
+          });
+        }
+        visibleText = visibleText.replace(goalRegex, '');
+
+        // Extract <initiative:... on ...>...</initiative>
+        const initiativeRegex = /<initiative:([^ >]+) on ([^>]+)>([\s\S]*?)<\/initiative>/g;
+        while ((match = initiativeRegex.exec(fullResponse)) !== null) {
+          extractableItems.push({
+            type: 'initiative',
+            id: match[1],
+            goalId: match[2],
+            text: match[3]
+          });
+        }
+        visibleText = visibleText.replace(initiativeRegex, '');
+
+        extractables = extractableItems;
+
+        onChunk({ text: visibleText, extractables });
+      }
+    }
+
+    return { fullResponse, extractables };
+  } catch (error) {
+    console.error('Error in onboarding chat stream:', error);
+    throw error;
+  }
 }; 

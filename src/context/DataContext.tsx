@@ -81,6 +81,7 @@ export interface AppData {
     theme: 'light' | 'dark';
     aiEnabled: boolean;
     apiKey?: string; // Added to store the API key securely
+    hasCompletedOnboarding: boolean; // Added to track onboarding state
   };
 }
 
@@ -229,6 +230,7 @@ const initialData: AppData = {
     theme: 'light',
     aiEnabled: true,
     apiKey: '', // Initialize with empty string
+    hasCompletedOnboarding: false, // Initialize as not completed
   },
 };
 

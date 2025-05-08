@@ -35,7 +35,7 @@ interface CrackItModalProps {
 }
 
 const CrackItModal: React.FC<CrackItModalProps> = ({ goal, initiative, onClose }) => {
-  const { data, addCheckIn } = useData();
+  const { data, addCheckIn, updateCheckIn } = useData();
   
   // State for chat messages
   const [messages, setMessages] = useState<Message[]>([]);
@@ -52,6 +52,11 @@ const CrackItModal: React.FC<CrackItModalProps> = ({ goal, initiative, onClose }
   
   // Storage key for chat history
   const storageKey = `crackitChat_${initiative.id}`;
+  
+  // Track which check-ins have been added from messages
+  const [addedCheckIns, setAddedCheckIns] = useState<string[]>([]);
+  const [editingCheckInId, setEditingCheckInId] = useState<string | null>(null);
+  const [editingCheckInText, setEditingCheckInText] = useState('');
   
   // Load chat history on mount
   useEffect(() => {
@@ -353,12 +358,60 @@ const CrackItModal: React.FC<CrackItModalProps> = ({ goal, initiative, onClose }
     }
   };
   
-  // Handle adding a check-in from a message
-  const handleAddCheckIn = (content: string) => {
-    addCheckIn(content, initiative.id, 'initiative');
-    
-    // Show confirmation
-    alert('Check-in added successfully!');
+  // Render assistant message with check-in extraction
+  const renderAssistantMessage = (content: string) => {
+    // Extract <check_in>...</check_in> tags
+    const checkInRegex = /<check_in>([\s\S]*?)<\/check_in>/g;
+    let lastIndex = 0;
+    let match;
+    const elements: JSX.Element[] = [];
+    let idx = 0;
+    while ((match = checkInRegex.exec(content)) !== null) {
+      const [fullMatch, checkInText] = match;
+      // Add text before the check-in
+      if (match.index > lastIndex) {
+        elements.push(<span key={`text-${idx}`}>{content.slice(lastIndex, match.index)}</span>);
+        idx++;
+      }
+      // Always show the check-in text
+      elements.push(
+        <span key={`checkin-text-${idx}`} className="inline-flex items-center ml-1">
+          <span className="italic text-blue-200">{checkInText}</span>
+          {!addedCheckIns.includes(checkInText) && (
+            <button
+              key={`checkin-btn-${idx}`}
+              onClick={() => {
+                addCheckIn(checkInText, initiative.id, 'initiative');
+                setAddedCheckIns((prev) => [...prev, checkInText]);
+              }}
+              className="ml-2 text-xs bg-blue-600/30 text-blue-300 px-3 py-1 rounded hover:bg-blue-600/50 flex items-center"
+            >
+              <span className="mr-1">📌</span> Add as check-in
+            </button>
+          )}
+        </span>
+      );
+      lastIndex = match.index + fullMatch.length;
+      idx++;
+    }
+    // Add remaining text
+    if (lastIndex < content.length) {
+      elements.push(<span key={`text-${idx}`}>{content.slice(lastIndex)}</span>);
+    }
+    return elements;
+  };
+
+  // Inline editing for check-ins
+  const startEditCheckIn = (checkIn: CheckIn) => {
+    setEditingCheckInId(checkIn.id);
+    setEditingCheckInText(checkIn.content);
+  };
+  const saveEditCheckIn = (checkInId: string) => {
+    if (editingCheckInText.trim()) {
+      updateCheckIn(checkInId, editingCheckInText);
+    }
+    setEditingCheckInId(null);
+    setEditingCheckInText('');
   };
   
   // Format file size
@@ -413,7 +466,11 @@ const CrackItModal: React.FC<CrackItModalProps> = ({ goal, initiative, onClose }
                     }`}
                   >
                     {/* Message content */}
-                    <div className="whitespace-pre-wrap mb-1">{message.content}</div>
+                    <div className="whitespace-pre-wrap mb-1">
+                      {message.role === 'assistant'
+                        ? renderAssistantMessage(message.content)
+                        : message.content}
+                    </div>
                     
                     {/* Attachments */}
                     {message.attachments && message.attachments.length > 0 && (
@@ -461,16 +518,6 @@ const CrackItModal: React.FC<CrackItModalProps> = ({ goal, initiative, onClose }
                     <div className="text-right text-xs mt-1 opacity-75">
                       {format(new Date(message.timestamp), 'h:mm a')}
                     </div>
-                    
-                    {/* Check-in button (if available) */}
-                    {message.role === 'assistant' && message.hasCheckIn && (
-                      <button
-                        onClick={() => handleAddCheckIn(message.content)}
-                        className="mt-2 text-xs bg-blue-600/30 text-blue-300 px-3 py-1 rounded hover:bg-blue-600/50 flex items-center"
-                      >
-                        <span className="mr-1">📌</span> Add as check-in
-                      </button>
-                    )}
                   </div>
                 </div>
               ))}
@@ -479,7 +526,7 @@ const CrackItModal: React.FC<CrackItModalProps> = ({ goal, initiative, onClose }
               {isTyping && streamedResponse && (
                 <div className="flex justify-start">
                   <div className="max-w-[80%] rounded-lg p-3 bg-gray-800 text-gray-200">
-                    <div className="whitespace-pre-wrap">{streamedResponse}</div>
+                    <div className="whitespace-pre-wrap">{renderAssistantMessage(streamedResponse)}</div>
                     <div className="mt-1 flex items-center">
                       <div className="loader">
                         <span className="dot dot1"></span>
@@ -645,13 +692,39 @@ const CrackItModal: React.FC<CrackItModalProps> = ({ goal, initiative, onClose }
                       className="relative"
                     >
                       <div className="absolute w-3 h-3 rounded-full bg-primary -left-[22px] top-1.5"></div>
-                      <div className="p-3 rounded-md bg-blue-900/30 border border-blue-700/50">
-                        <div className="flex justify-between mb-1">
-                          <div className="text-sm text-gray-400">
-                            {format(new Date(checkIn.timestamp), 'MMM d, h:mm a')}
-                          </div>
-                        </div>
-                        <p className="text-gray-200 whitespace-pre-wrap text-sm">{checkIn.content}</p>
+                      <div className="p-3 rounded-md bg-blue-900/30 border border-blue-700/50 flex items-center">
+                        {editingCheckInId === checkIn.id ? (
+                          <>
+                            <input
+                              className="flex-1 p-1 rounded bg-gray-700 text-white border border-primary focus:outline-none mr-2"
+                              value={editingCheckInText}
+                              onChange={(e) => setEditingCheckInText(e.target.value)}
+                              onBlur={() => saveEditCheckIn(checkIn.id)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') saveEditCheckIn(checkIn.id);
+                                if (e.key === 'Escape') setEditingCheckInId(null);
+                              }}
+                              autoFocus
+                            />
+                            <button
+                              className="text-xs text-primary ml-1"
+                              onClick={() => saveEditCheckIn(checkIn.id)}
+                            >
+                              Save
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <span className="flex-1 text-gray-200 text-sm">{checkIn.content}</span>
+                            <button
+                              className="ml-2 text-xs text-gray-400 hover:text-primary"
+                              onClick={() => startEditCheckIn(checkIn)}
+                              title="Edit check-in"
+                            >
+                              ✎
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   ))}

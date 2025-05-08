@@ -3,9 +3,11 @@ import { useData } from '../context/DataContext';
 import { motion } from 'framer-motion';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
 import { syncDataToServer, syncDataFromServer } from '../utils/syncData';
+import { useOnboarding } from '../context/OnboardingContext';
 
 const SettingsPage: React.FC = () => {
   const { data, updateSettings, addEmotion, removeEmotion } = useData();
+  const { startOnboarding } = useOnboarding();
   const [apiKey, setApiKey] = useState('');
   const [apiKeyStatus, setApiKeyStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [newEmotion, setNewEmotion] = useState({ name: '', isPositive: true, emoji: '' });
@@ -236,6 +238,26 @@ const SettingsPage: React.FC = () => {
           <p>
             Syncing ensures your data is backed up and available across all your devices.
           </p>
+        </div>
+      </div>
+      
+      {/* Onboarding Section */}
+      <div className="bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-xl font-semibold mb-4 text-white">Onboarding</h2>
+        
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-gray-300">
+              Restart the onboarding process to learn about RedButton's features.
+            </p>
+          </div>
+          
+          <button
+            onClick={startOnboarding}
+            className="px-4 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700"
+          >
+            View Onboarding
+          </button>
         </div>
       </div>
       

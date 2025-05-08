@@ -6,13 +6,17 @@ import {
   streamChatResponse, 
   EnhancedSuggestion,
   ChatContext,
-  ChatMessage
+  ChatMessage,
+  streamChatCompletion,
+  streamOnboardingChatResponse,
+  ExtractableItem
 } from '../utils/openai';
 import UserData from '../models/userdata.model';
 import User from '../models/user.model';
 import { initializeOpenAI, ensureOpenAI } from '../utils/openai';
 import { IncomingForm } from 'formidable';
 import fs from 'fs';
+import { ReadableStream } from 'stream/web';
 
 // Generate suggestions based on emotion
 export const generateSuggestions = async (req: Request, res: Response): Promise<void> => {
@@ -361,5 +365,50 @@ export const uploadFileToOpenAI = async (req: Request, res: Response): Promise<v
       success: false, 
       message: 'Error processing file upload' 
     });
+  }
+};
+
+export const handleOnboardingChat = async (message: string): Promise<ReadableStream<Uint8Array>> => {
+  const prompt = `You are an AI assistant helping a user set up their initial goals and initiatives in the RedButton app. The user's message is: "${message}". Please provide a helpful response. If you suggest a goal or initiative, wrap it in <goal:...> or <initiative:...> tags.`;
+  return streamChatCompletion(prompt) as Promise<ReadableStream<Uint8Array>>;
+};
+
+export const onboardingChat = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?._id;
+    if (!userId) {
+      res.status(401).json({ success: false, message: 'Unauthorized' });
+      return;
+    }
+
+    const { history = [] } = req.body;
+
+    // Set up server-sent events
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+
+    // Function to send chunks of data
+    const sendData = (data: { text: string; extractables: ExtractableItem[] }) => {
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    try {
+      await streamOnboardingChatResponse(history, sendData);
+      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      res.end();
+    } catch (error) {
+      console.error('Error in onboarding chat stream:', error);
+      res.write(`data: ${JSON.stringify({ error: 'Error processing onboarding chat' })}\n\n`);
+      res.end();
+    }
+  } catch (error) {
+    console.error('Error in onboardingChat:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, message: 'Error processing onboarding chat' });
+    } else {
+      res.end();
+    }
   }
 }; 

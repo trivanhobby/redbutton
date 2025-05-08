@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useData } from './context/DataContext';
 import { useAuth } from './context/AuthContext';
+import { OnboardingProvider } from './context/OnboardingContext';
 
 // Layout components
 import MainLayout from './components/layouts/MainLayout';
@@ -17,12 +18,14 @@ import WidgetPage from './pages/WidgetPage';
 import LoginPage from './pages/LoginPage';
 import RegistrationPage from './pages/RegistrationPage';
 import AdminPage from './pages/AdminPage';
+import OnboardingTestPage from './pages/OnboardingTestPage';
 
 // Components
 import SuggestionDialog from './components/SuggestionDialog';
 import TimerStatusBar from './components/TimerStatusBar';
+import Onboarding from './components/Onboarding';
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
   const location = useLocation();
   const { data, updateSettings } = useData();
   const { isAuthenticated } = useAuth();
@@ -38,8 +41,9 @@ const App: React.FC = () => {
   return (
     <>
       {/* Timer status bar that appears at the top of the app when a timer is active */}
+      bop
       {isAuthenticated && <TimerStatusBar />}
-      
+      blup
       <motion.div 
         className="app-container bg-background"
         initial={{ opacity: 0 }}
@@ -52,6 +56,7 @@ const App: React.FC = () => {
           <Route path="/register" element={<RegistrationPage />} />
           <Route path="/admin" element={<AdminPage />} />
           
+          
           {/* Protected routes */}
           <Route element={<PrivateRoute />}>
             <Route path="/" element={<MainLayout />}>
@@ -60,6 +65,7 @@ const App: React.FC = () => {
               <Route path="journal" element={<JournalPage />} />
               <Route path="goals" element={<GoalsPage />} />
               <Route path="settings" element={<SettingsPage />} />
+              <Route path="onboarding-test" element={<OnboardingTestPage />} />
             </Route>
           </Route>
           
@@ -69,7 +75,18 @@ const App: React.FC = () => {
       
       {/* SuggestionDialog listens for emotion-selected events from the menu bar */}
       {isAuthenticated && <SuggestionDialog />}
+      
+      {/* Onboarding component will show when needed */}
+      {isAuthenticated && <Onboarding />}
     </>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <OnboardingProvider>
+      <AppContent />
+    </OnboardingProvider>
   );
 };
 

@@ -384,3 +384,17 @@ export const syncUserData = async (
   
   return response.json();
 };
+
+export const sendOnboardingChatMessage = async (message: string): Promise<ReadableStream<Uint8Array>> => {
+  const response = await fetch(`${API_BASE_URL}/api/ai/onboarding-chat`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ message }),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to send message');
+  }
+  return response.body as ReadableStream<Uint8Array>;
+};

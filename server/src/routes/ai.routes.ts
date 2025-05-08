@@ -4,7 +4,9 @@ import {
   createJournalTemplate, 
   polishEntry, 
   initiativeChat,
-  uploadFileToOpenAI
+  uploadFileToOpenAI,
+  handleOnboardingChat,
+  onboardingChat
 } from '../controllers/ai.controller';
 import { requireAuth } from '../middleware/auth.middleware';
 
@@ -27,5 +29,7 @@ router.post('/initiative-chat', initiativeChat);
 
 // Route for uploading files to OpenAI
 router.post('/upload-file', uploadFileToOpenAI);
+
+router.post('/onboarding-chat', onboardingChat);
 
 export default router; 
