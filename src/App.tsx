@@ -18,12 +18,12 @@ import WidgetPage from './pages/WidgetPage';
 import LoginPage from './pages/LoginPage';
 import RegistrationPage from './pages/RegistrationPage';
 import AdminPage from './pages/AdminPage';
-import OnboardingTestPage from './pages/OnboardingTestPage';
 
 // Components
 import SuggestionDialog from './components/SuggestionDialog';
 import TimerStatusBar from './components/TimerStatusBar';
 import Onboarding from './components/Onboarding';
+import FollowupDialog from './components/FollowupDialog';
 
 const AppContent: React.FC = () => {
   const location = useLocation();
@@ -41,9 +41,7 @@ const AppContent: React.FC = () => {
   return (
     <>
       {/* Timer status bar that appears at the top of the app when a timer is active */}
-      bop
       {isAuthenticated && <TimerStatusBar />}
-      blup
       <motion.div 
         className="app-container bg-background"
         initial={{ opacity: 0 }}
@@ -65,7 +63,6 @@ const AppContent: React.FC = () => {
               <Route path="journal" element={<JournalPage />} />
               <Route path="goals" element={<GoalsPage />} />
               <Route path="settings" element={<SettingsPage />} />
-              <Route path="onboarding-test" element={<OnboardingTestPage />} />
             </Route>
           </Route>
           
@@ -78,6 +75,8 @@ const AppContent: React.FC = () => {
       
       {/* Onboarding component will show when needed */}
       {isAuthenticated && <Onboarding />}
+      
+      <FollowupDialog />
     </>
   );
 };

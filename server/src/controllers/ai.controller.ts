@@ -9,7 +9,8 @@ import {
   ChatMessage,
   streamChatCompletion,
   streamOnboardingChatResponse,
-  ExtractableItem
+  ExtractableItem,
+  getSuggestionExplanation as getExplanationFromAI
 } from '../utils/openai';
 import UserData from '../models/userdata.model';
 import User from '../models/user.model';
@@ -67,6 +68,7 @@ export const generateSuggestions = async (req: Request, res: Response): Promise<
     
     // Generate suggestions
     const suggestions = await getSuggestionsForEmotion(
+      userId as string,
       emotionId,
       emotionName,
       isPositive,
@@ -410,5 +412,61 @@ export const onboardingChat = async (req: Request, res: Response): Promise<void>
     } else {
       res.end();
     }
+  }
+};
+
+// Get explanation for a suggestion
+export const getSuggestionExplanation = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?._id;
+    
+    if (!userId) {
+      res.status(401).json({ 
+        success: false, 
+        message: 'Unauthorized' 
+      });
+      return;
+    }
+    
+    const { 
+      suggestion,
+      emotionName,
+      isPositive,
+      relatedItem
+    } = req.body;
+    
+    // Validate required fields
+    if (!suggestion || !emotionName || isPositive === undefined) {
+      res.status(400).json({ 
+        success: false, 
+        message: 'Missing required fields' 
+      });
+      return;
+    }
+    
+    // Check if user has API key
+    const user = await User.findById(userId);
+    if (user?.apiKey) {
+      initializeOpenAI(user.apiKey);
+    }
+    
+    // Get explanation
+    const explanation = await getExplanationFromAI(
+      suggestion,
+      emotionName,
+      isPositive,
+      relatedItem
+    );
+    
+    res.status(200).json({
+      success: true,
+      explanation
+    });
+  } catch (error) {
+    console.error('Error getting suggestion explanation:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error getting explanation' 
+    });
   }
 }; 

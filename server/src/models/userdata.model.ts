@@ -33,7 +33,9 @@ const EmotionRecordSchema = new Schema({
   timestamp: { type: String, required: true },
   action: { type: String },
   timeInMinutes: { type: Number },
-  suggestionSelected: { type: String }
+  suggestionSelected: { type: String },
+  followup: { type: String },
+  feedback: { type: Schema.Types.Mixed },
 });
 
 // Action Schema

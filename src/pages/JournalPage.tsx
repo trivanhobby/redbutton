@@ -362,6 +362,33 @@ const JournalPage: React.FC = () => {
                             <span className="font-medium text-blue-400">Action taken:</span> {record.suggestionSelected}
                           </div>
                         )}
+                        {/* Followup/feedback display */}
+                        {record.suggestionSelected && (record.followup || record.feedback !== undefined) && (
+                          <div
+                            className={`mt-2 text-sm p-2 rounded border transition-colors
+                              ${record.feedback === true ? 'bg-green-900/40 border-green-700/70' :
+                                record.feedback === false ? 'bg-red-900/40 border-red-700/70' :
+                                'bg-gray-800/40 border-gray-700/70'}`}
+                          >
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-medium">Follow-up:</span>
+                              {typeof record.feedback === 'boolean' ? (
+                                <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold
+                                  ${record.feedback === true ? 'bg-green-700 text-green-100' : 'bg-red-700 text-red-100'}`}
+                                >
+                                  {record.feedback === true ? '👍 Helped' : '👎 Didn\'t help'}
+                                </span>
+                              ) : record.feedback ? (
+                                <span className="inline-block px-2 py-0.5 rounded-full text-xs bg-gray-700 text-gray-200">
+                                  {typeof record.feedback === 'string' ? record.feedback : ''}
+                                </span>
+                              ) : null}
+                            </div>
+                            {record.followup && (
+                              <div className="text-gray-200 whitespace-pre-line">{record.followup}</div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </motion.div>
                   );

@@ -63,6 +63,7 @@
     "cross-env": "^7.0.3",
     "electron": "^27.0.0",
     "electron-builder": "^24.6.4",
+    "electron-notarize": "^1.2.2",
     "postcss": "^8.4.31",
     "react-scripts": "^5.0.1",
     "remotion": "^4.0.296",
@@ -100,7 +101,6 @@
     "asarUnpack": [
       "node_modules/electron-is-dev/**/*"
     ],
-    "afterSign": "build-resources/notarize.js",
     "publish": null,
     "mac": {
       "category": "public.app-category.productivity",
@@ -114,7 +114,10 @@
         "dmg",
         "zip"
       ],
-      "identity": null,
+      "identity": "IVAN TRIFONOV (ET34KRBLT3)",
+      "notarize": {
+        "teamId": "ET34KRBLT3"
+      },
       "protocols": [
         {
           "name": "RedButton Registration Link",

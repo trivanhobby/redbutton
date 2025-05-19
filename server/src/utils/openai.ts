@@ -101,8 +101,10 @@ const formatGoalsWithDetails = (
   return formattedGoals;
 };
 
+let latestResponses: Map<string, string> = new Map();
 // Get suggestions for a specific emotion
 export const getSuggestionsForEmotion = async (
+  userId: string,
   emotionId: string,
   emotionName: string,
   isPositive: boolean,
@@ -120,8 +122,8 @@ export const getSuggestionsForEmotion = async (
     
     // Create the prompt based on whether it's a positive or negative emotion
     let prompt = isPositive
-      ? `I'm feeling ${emotionName} right now and I have ${availableMinutes} minutes available.`
-      : `I'm feeling ${emotionName} right now and I have ${availableMinutes} minutes available. I need some suggestions to help me feel better or be more productive.`;
+      ? ``
+      : `User is feeling ${emotionName} right now and has ${availableMinutes} minutes available.`;
       
     // Add action context for positive emotions
     if (isPositive && action) {
@@ -131,22 +133,39 @@ export const getSuggestionsForEmotion = async (
         prompt += ` I want you to help me to identify a next step.`;
       }
     }
-    
+    let key = `${userId}-${emotionId}`;
+    let latestResponse = latestResponses.get(key);
     // Complete the prompt with goals context
-    prompt += `\n\nHere are my current goals and initiatives:\n${goalsText}
-    Given my current state and goals, what are 3 specific actions I could take in the next ${availableMinutes} minutes?
+    prompt += `User is feeling ${emotionName} right now and has ${availableMinutes} minutes available.
+    You're called in a very sensitive moment, user noticed that he is about to start doing something that he doesn't like because he has no better idea and he requires a small nudge.
+    You should provide him several suggestions. Don't afraid to be mistaken - user will ask more suggestions if needed.
+    
+    Given user's current state and goals, what are 3 the best actions he can take in the next ${availableMinutes} minutes?
 
     I want your actions to be 
-    - very specific and brief. (for example: "let's go running for 30 minutes" is a good initiatve, but "Set a Micro-Goal (Professional Growth): Take 3 minutes to jot down one small, actionable step you can take toward your professional growth" - not so good. it is too abstract )
-    - exactly fit to the available time
+    - very specific and brief. (for example: "let's go running for 30 minutes" is a good initiatve, but "Set a Micro-Goal (Professional Growth): Take 3 minutes to jot down one small, actionable step you can take toward your professional growth" - not so good. it is too abstract)
+    - exactly fit to the available time (every of suggested action should target to utilize whole ${availableMinutes} minutes)
     - look at the goals, initiatives and check-ins (CONSIDERING IT's DATES - that's what user choose!) AND
       - try to balance between the goals - to not prioritize one goal over the others
       - propose actions that are about different goals
       - combine some very straightforwards actions (for example: "let's go running for 30 minutes") with more abstract & complex ones 
+      - sometimes suggest to do nothing.
+      - less abstract, less planning. More actions that are closer to the user's current state. If user goals is about fitness, don't suggest to plan a 30 minutes workout on Monday, just use the 5 free minutes time to do activity. Don't suggest to "plan how to achieve x", better say - "write down X and do Y right now".
+      - sometimes suggest actions out of a goals. Especially if user is feeling negative.
+      ${isPositive && action ? 'User additional intention is to ' + action : ''}
 
     OUTPUT FORMAT NOTES:
     - each action should be in a new line. No multiline actions. (but line could be a bit longer than 100 characters)
     - if action relevant to specific goal or to specific initiative, follow the format: <id>: <action_text>
+    - each action - under 15 words.
+    CONTEXT:
+
+        Your previous suggestions to the user was: 
+        ${latestResponse}
+        And you may assume that user don't like them. So pleaes come-up with something new.
+        ====
+        Here are user's goals, initiatives and check-ins:\n${goalsText}
+
     `;    
     // Call OpenAI API
     const response = await ai.chat.completions.create({
@@ -154,7 +173,7 @@ export const getSuggestionsForEmotion = async (
       messages: [
         {
           role: 'system',
-          content: 'You are an empathetic assistant helping users respond effectively to their emotional states.'
+          content: 'You are an empathetic assistant helping users to overcome struggle and define what is the best they can do in that given moment.'
         },
         {
           role: 'user',
@@ -165,6 +184,7 @@ export const getSuggestionsForEmotion = async (
       max_tokens: API_CONFIG_FULL.aiLimits.maxTokens.suggestions
     });
     
+    latestResponses.set(key, latestResponse + '\n\n' + (response.choices[0].message.content || ''));
     // Extract and format the suggestions
     const suggestionsText = response.choices[0].message.content || '';
     let suggestions = processSuggestions(suggestionsText, goals, initiatives);
@@ -573,11 +593,17 @@ export const streamOnboardingChatResponse = async (
 
     // System prompt for onboarding
     const systemMessage = `
-You are an AI onboarding assistant for the RedButton app. 
+You are an AI onboarding assistant for the RedButton app. Goal of the application is to help user to overcome struggle and define what is the best they can do in that given moment.
+It is important to have a well defined goals for the user - you're the assistant that helps user to define them.
+You should come-up based on user input what is the best goal he has in mind.
+When you suggested a goal and user accepted it - you may help him to define initiatives (it is like Initiatives in OKR framework - the best actions or activities meeting which it would be easy to say that the goal is achieved).
+When user moves to the next goal - focus on this one.
+
 When you suggest a goal, wrap it as <goal:unique_id>Goal text</goal>.
-When you suggest an initiative, wrap it as <initiative:unique_id on goal_id>Initiative text</initiative>.
+When you suggest an initiative, wrap it as <initiative:unique_id|goal_id>Initiative text</initiative>.
 Do not use the same ID twice. 
-Do not include the text inside these tags in the visible message; it will be shown as a button instead.
+
+Focus on understanding user's wishes, not pushing your own agenda. So don't try make every your answer a pushy goal or initiative. Make sure that you understand what user wants.
 `;
 
     // Prepare messages array
@@ -621,8 +647,8 @@ Do not include the text inside these tags in the visible message; it will be sho
         }
         visibleText = visibleText.replace(goalRegex, '');
 
-        // Extract <initiative:... on ...>...</initiative>
-        const initiativeRegex = /<initiative:([^ >]+) on ([^>]+)>([\s\S]*?)<\/initiative>/g;
+        // Extract <initiative:...|...>...</initiative>
+        const initiativeRegex = /<initiative:([^ >]+)\|([^>]+)>([\s\S]*?)<\/initiative>/g;
         while ((match = initiativeRegex.exec(fullResponse)) !== null) {
           extractableItems.push({
             type: 'initiative',
@@ -642,6 +668,62 @@ Do not include the text inside these tags in the visible message; it will be sho
     return { fullResponse, extractables };
   } catch (error) {
     console.error('Error in onboarding chat stream:', error);
+    throw error;
+  }
+};
+
+// Get explanation for a suggestion
+export const getSuggestionExplanation = async (
+  suggestion: string,
+  emotionName: string,
+  isPositive: boolean,
+  relatedItem?: {
+    id: string;
+    type: 'goal' | 'initiative';
+    name: string;
+  }
+): Promise<string> => {
+  try {
+    const ai = ensureOpenAI();
+    
+    let prompt = `I need a detailed explanation of how to do this action: "${suggestion}"`;
+    
+    if (relatedItem) {
+      prompt += `\nThis action is related to my ${relatedItem.type}: "${relatedItem.name}"`;
+    }
+    
+    prompt += `\nI'm currently feeling ${emotionName} (${isPositive ? 'positive' : 'negative'} emotion).`;
+    
+    prompt += `\n\nPlease provide a step-by-step explanation of how to do this action effectively. Include:
+    1. What exactly needs to be done
+    2. How to approach it
+    3. Any tips or common pitfalls to avoid
+    4. How this action can help with my current emotional state
+    
+    It should be crazhy short and actionable. up to 10 sentences, every max 7 words.
+    
+    Structure response as a list of steps started with "-".
+    `;
+    
+    const response = await ai.chat.completions.create({
+      model: API_CONFIG_FULL.defaultModel,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a helpful assistant providing clear, practical guidance on how to perform actions effectively.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: API_CONFIG_FULL.aiLimits.temperature.suggestions,
+      max_tokens: API_CONFIG_FULL.aiLimits.maxTokens.suggestions
+    });
+    
+    return response.choices[0].message.content || 'Sorry, I could not generate an explanation at this time.';
+  } catch (error) {
+    console.error('Error generating explanation:', error);
     throw error;
   }
 }; 

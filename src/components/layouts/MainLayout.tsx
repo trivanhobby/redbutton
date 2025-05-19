@@ -40,9 +40,6 @@ const MainLayout: React.FC = () => {
             <Link to="/settings" className={`py-2 px-1 transition-colors ${isActive('/settings')}`}>
               Settings
             </Link>
-            <Link to="/onboarding-test" className={`py-2 px-1 transition-colors ${isActive('/onboarding-test')}`}>
-              Onboarding Test
-            </Link>
           </nav>
                     
           {/* Mobile menu button */}

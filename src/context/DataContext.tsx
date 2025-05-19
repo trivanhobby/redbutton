@@ -17,6 +17,8 @@ export interface EmotionRecord {
   action?: string;  // For positive emotions: 'celebrate', 'journal', 'plan'
   timeInMinutes?: number;
   suggestionSelected?: string; // Track which suggestion was selected
+  followup?: string; // User's followup text after doing suggestion
+  feedback?: boolean | string; // true/false or emotion id
 }
 
 export interface Action {
@@ -246,6 +248,7 @@ interface DataContextType {
   updateJournalEntry: (id: string, content: string) => void;
   addEmotionToJournal: (date: string, emotionRecord: EmotionRecord) => string; // Returns the entry ID
   removeEmotionFromJournal: (entryId: string, timestamp: string) => void; // Remove emotion record by timestamp
+  updateEmotionRecordFollowup: (entryId: string, timestamp: string, followup: string, feedback: boolean | string) => void;
   
   // Goals
   addGoal: (text: string, description?: string) => void;
@@ -704,6 +707,29 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setCurrentRequest(null);
   };
 
+  // Add or update followup/feedback for an emotion record
+  const updateEmotionRecordFollowup = (entryId: string, timestamp: string, followup: string, feedback: boolean | string) => {
+    setData((prev) => {
+      const updatedJournalEntries = prev.journalEntries.map(entry => {
+        if (entry.id === entryId) {
+          return {
+            ...entry,
+            emotionRecords: entry.emotionRecords.map(record =>
+              record.timestamp === timestamp
+                ? { ...record, followup, feedback }
+                : record
+            )
+          };
+        }
+        return entry;
+      });
+      return {
+        ...prev,
+        journalEntries: updatedJournalEntries
+      };
+    });
+  };
+
   const contextValue: DataContextType = {
     data,
     addEmotion,
@@ -715,6 +741,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     updateJournalEntry,
     addEmotionToJournal,
     removeEmotionFromJournal,
+    updateEmotionRecordFollowup,
     addGoal,
     updateGoal,
     toggleGoal,

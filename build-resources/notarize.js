@@ -1,17 +1,39 @@
-// This is a placeholder for a notarization script
-// In a real production app, you would implement notarization here
-// For now, we're just using it for logging purposes
+const { notarize } = require('electron-notarize');
+const path = require('path');
+const fs = require('fs');
 
-module.exports = async function(params) {
-  // Extract useful information
-  const { appOutDir, packager, outDir } = params;
-  
-  console.log('=== Build Information ===');
-  console.log('App Output Directory:', appOutDir);
-  console.log('Platform:', packager.platform.name);
-  console.log('Output Directory:', outDir);
-  console.log('=========================');
-  
-  // Return success
-  return true;
-}; 
+exports.default = async function (context) {
+  const { electronPlatformName, appOutDir, packager } = context;
+
+  if (electronPlatformName !== 'darwin') {
+    return;
+  }
+
+  console.log('Notarizing macOS app...');
+
+  const appName = packager.appInfo.productFilename;
+  const appPath = path.join(appOutDir, `${appName}.app`);
+
+  if (!fs.existsSync(appPath)) {
+    console.log(`Skipping notarization: ${appPath} does not exist`);
+    return;
+  }
+
+  const appleId = process.env.APPLE_ID;
+  const appleIdPassword = process.env.APPLE_APP_PASSWORD; // ← проверь правильность переменной
+  const appleTeamId = process.env.APPLE_TEAM_ID;
+
+  if (!appleId || !appleIdPassword || !appleTeamId) {
+    throw new Error('Missing Apple credentials for notarization. Set APPLE_ID, APPLE_APP_PASSWORD, and APPLE_TEAM_ID.');
+  }
+
+  await notarize({
+    appBundleId: 'com.redbutton.app',
+    appPath,
+    appleId,
+    appleIdPassword,
+    teamId: appleTeamId,
+  });
+
+  console.log('Notarization complete.');
+};

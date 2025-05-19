@@ -4,6 +4,9 @@ import { useOnboarding, ONBOARDING_STEPS, OnboardingStep as StepType } from '../
 import { Icon } from '@iconify/react';
 import OnboardingAnimation from './onboarding/OnboardingAnimation';
 import OnboardingOverview from './onboarding/OnboardingOverview';
+import OnboardingGoalChat from './onboarding/OnboardingGoalChat';
+import { useNavigate } from 'react-router-dom';
+
 type OnboardingStepProps = {
   title: string;
   description: string;
@@ -30,47 +33,47 @@ const Onboarding: React.FC = () => {
     nextStep, 
     prevStep 
   } = useOnboarding();
+  const navigate = useNavigate();
 
   if (!isOnboarding) {
     return null;
   }
 
-  // Define step content
-  const stepContent: Record<StepType, { title: string; description: string }> = {
+  // Define the 5-step onboarding flow
+  const stepContent: Record<string, { title: string; description: string } | null> = {
     animation: { title: '', description: '' },
     flow: { title: '', description: '' },
-    welcome: {
-      title: 'Welcome to RedButton',
-      description: 'Get started on your productivity journey with our guided tour.'
+    prepareGoals: {
+      title: 'Prepare to Fill in Your Goals',
+      description: 'You are about to add your first goals. Use the assistant to talk about what you want to achieve. You can always add or tweak goals later from the Goals page!'
     },
-    goals: {
-      title: 'Set Meaningful Goals',
-      description: 'Learn how to create and track your long-term goals.'
-    },
-    initiatives: {
-      title: 'Break Down Into Initiatives',
-      description: 'Divide your goals into manageable initiatives.'
-    },
-    checkins: {
-      title: 'Regular Check-ins',
-      description: 'Track your progress with daily and weekly check-ins.'
-    },
-    journal: {
-      title: 'Journal Your Thoughts',
-      description: 'Record your reflections and ideas in the journal.'
-    },
-    calendar: {
-      title: 'Plan With Calendar',
-      description: 'Schedule your time effectively with our calendar view.'
-    },
-    complete: {
-      title: 'You\'re All Set!',
-      description: 'You\'re now ready to use RedButton to its full potential.'
+    chat: null, // handled by OnboardingGoalChat
+    subscription: {
+      title: 'The Power of Contextual Generation',
+      description: 'We can provide you with generic recommendations based on similar goals of other users, or create them entirely for you!'
     }
   };
 
-  // Get content for current step
+  const ONBOARDING_FLOW: string[] = [
+    'animation',
+    'flow',
+    'prepareGoals',
+    'chat',
+    'subscription'
+  ];
+
   const content = stepContent[currentStep];
+
+  const finishAndGoToGoals = () => {
+    skipOnboarding();
+    navigate('/goals');
+  };
+
+  // Popup size: large for chat step
+  let popupClass = 'bg-card rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto';
+  if (String(currentStep) === 'chat') {
+    popupClass = 'bg-card rounded-lg shadow-xl max-w-6xl w-full max-h-[98vh] m-4 overflow-y-auto';
+  }
 
   return (
     <AnimatePresence>
@@ -79,19 +82,19 @@ const Onboarding: React.FC = () => {
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.9 }}
-          className="bg-card rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+          className={popupClass}
         >
           <div className="p-5">
             {/* Progress indicator */}
             <div className="flex justify-between mb-8">
-              {ONBOARDING_STEPS.map((step) => {
-                const currentStepIndex = ONBOARDING_STEPS.indexOf(currentStep);
-                const stepIndex = ONBOARDING_STEPS.indexOf(step);
+              {ONBOARDING_FLOW.map((step) => {
+                const currentStepIndex = ONBOARDING_FLOW.indexOf(String(currentStep));
+                const stepIndex = ONBOARDING_FLOW.indexOf(step);
                 return (
                   <div
                     key={step}
                     className={`h-2 w-full mx-1 rounded-full ${
-                      currentStep === step
+                      String(currentStep) === step
                         ? 'bg-primary animate-pulse'
                         : currentStepIndex > stepIndex
                           ? 'bg-primary'
@@ -104,14 +107,14 @@ const Onboarding: React.FC = () => {
 
             {/* Content */}
             <div className="mb-6">
-              {currentStep === 'animation' && (
+              {String(currentStep) === 'animation' && (
                 <div className="flex flex-col items-center">
                   <div className="w-full max-w-3xl mx-auto">
                     <OnboardingAnimation autoPlay={true} />
                   </div>
                 </div>
               )}
-              {currentStep === 'flow' && (
+              {String(currentStep) === 'flow' && (
                 <div className="flex flex-col items-center">
                   <h2 className="text-2xl font-bold mb-4">In short</h2>
                   <div className="w-full max-w-2xl mx-auto">
@@ -119,29 +122,57 @@ const Onboarding: React.FC = () => {
                   </div>
                 </div>
               )}
-              {currentStep !== 'animation' && currentStep !== 'flow' && (
-                <OnboardingStepContent 
-                  title={content.title} 
-                  description={content.description} 
-                />
+              {String(currentStep) === 'prepareGoals' && content && (
+                <div className="flex flex-col items-center text-center">
+                  <h2 className="text-2xl font-bold mb-4">{content.title}</h2>
+                  <p className="text-muted-foreground mb-8 max-w-xl mx-auto">{content.description}</p>
+                </div>
+              )}
+              {String(currentStep) === 'chat' && (
+                <div className="flex flex-col items-center">
+                  <div className="w-full max-w-6xl mx-auto">
+                    <OnboardingGoalChat />
+                  </div>
+                </div>
+              )}
+              {String(currentStep) === 'subscription' && (
+                <div className="flex flex-col items-center text-center">
+                  <h2 className="text-2xl font-bold mb-4">{stepContent.subscription?.title}</h2>
+                  <p className="text-muted-foreground mb-8 max-w-xl mx-auto">{stepContent.subscription?.description}</p>
+                  <div className="w-full flex flex-col sm:flex-row gap-4 justify-center">
+                    <button
+                      className="px-6 py-3 bg-primary text-white rounded-md hover:bg-opacity-90 text-lg font-semibold"
+                      onClick={finishAndGoToGoals}
+                    >
+                      Subscribe
+                    </button>
+                    <button
+                      className="px-6 py-3 bg-gray-700 text-white rounded-md hover:bg-gray-600 text-lg font-semibold"
+                      onClick={finishAndGoToGoals}
+                    >
+                      I'm good
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
 
             {/* Navigation buttons */}
             <div className="flex justify-between mt-8">
               <button
-                onClick={currentStep === 'animation' ? skipOnboarding : prevStep}
+                onClick={String(currentStep) === 'animation' ? skipOnboarding : prevStep}
                 className="px-4 py-2 text-muted-foreground hover:text-foreground transition-colors"
               >
-                {currentStep === 'animation' ? 'Skip' : 'Back'}
+                {String(currentStep) === 'animation' ? 'Skip' : 'Back'}
               </button>
 
               <button
                 onClick={nextStep}
                 className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors flex items-center gap-2"
+                disabled={ONBOARDING_FLOW.indexOf(String(currentStep)) === -1}
               >
-                {currentStep === 'complete' ? 'Finish' : 'Next'}
-                <Icon icon="mdi:arrow-right" className="w-5 h-5" />
+                {String(currentStep) === 'subscription' ? 'Finish' : 'Next'}
+                <span className="text-xl">→</span>
               </button>
             </div>
           </div>

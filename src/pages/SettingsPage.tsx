@@ -197,75 +197,10 @@ const SettingsPage: React.FC = () => {
 
       <h1 className="text-3xl font-bold mb-6 text-white">Settings</h1>
       
-      {/* Data Synchronization */}
-      <div className="bg-gray-800 rounded-lg shadow-md p-6 mb-6">
-        <h2 className="text-xl font-semibold mb-4 text-white">Data Synchronization</h2>
-        
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <p className="text-gray-300">
-              Last synchronized: <span className="font-medium">{getFormattedSyncTime()}</span>
-            </p>
-            <p className="text-sm text-gray-400 mt-1">
-              Your data is automatically synced to the server when you make changes.
-            </p>
-          </div>
-          
-          <button
-            onClick={handleManualSync}
-            disabled={syncStatus === 'syncing'}
-            className={`px-4 py-2 rounded-md text-white ${
-              syncStatus === 'syncing' 
-                ? 'bg-blue-600 opacity-70 cursor-wait' 
-                : syncStatus === 'success'
-                ? 'bg-green-600'
-                : syncStatus === 'error'
-                ? 'bg-red-600'
-                : 'bg-blue-600 hover:bg-blue-700'
-            }`}
-          >
-            {syncStatus === 'syncing' 
-              ? 'Syncing...' 
-              : syncStatus === 'success'
-              ? 'Sync Successful'
-              : syncStatus === 'error'
-              ? 'Sync Failed'
-              : 'Sync Now'}
-          </button>
-        </div>
-        
-        <div className="text-sm text-gray-400">
-          <p>
-            Syncing ensures your data is backed up and available across all your devices.
-          </p>
-        </div>
-      </div>
-      
-      {/* Onboarding Section */}
-      <div className="bg-gray-800 rounded-lg shadow-md p-6 mb-6">
-        <h2 className="text-xl font-semibold mb-4 text-white">Onboarding</h2>
-        
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <p className="text-gray-300">
-              Restart the onboarding process to learn about RedButton's features.
-            </p>
-          </div>
-          
-          <button
-            onClick={startOnboarding}
-            className="px-4 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700"
-          >
-            View Onboarding
-          </button>
-        </div>
-      </div>
-      
       {/* Emotion Settings */}
       <div className="bg-gray-800 rounded-lg shadow-md p-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold text-white">Emotion Settings</h2>
-          
           {/* Custom Emotions Toggle */}
           <div className="flex items-center">
             <span className="text-sm text-gray-400 mr-2">Custom Emotions</span>
@@ -280,7 +215,6 @@ const SettingsPage: React.FC = () => {
             </label>
           </div>
         </div>
-        
         {/* Add New Emotion (only shown if custom emotions are enabled) */}
         {data.settings.customEmotions && (
           <div className="mb-6 p-4 border border-gray-700 rounded-md bg-gray-700">
@@ -311,14 +245,6 @@ const SettingsPage: React.FC = () => {
                   />
                 </div>
               )}
-              {/* <input
-                type="text"
-                placeholder="Emoji (e.g., 😃)"
-                value={newEmotion.emoji}
-                onChange={(e) => setNewEmotion({ ...newEmotion, emoji: e.target.value })}
-                className="w-24 p-2 border border-gray-600 rounded-md bg-gray-800 text-center text-2xl"
-                maxLength={2}
-              /> */}
               <select
                 value={newEmotion.isPositive ? 'positive' : 'negative'}
                 onChange={(e) => setNewEmotion({ ...newEmotion, isPositive: e.target.value === 'positive' })}
@@ -340,7 +266,6 @@ const SettingsPage: React.FC = () => {
             </p>
           </div>
         )}
-        
         {/* Emotion Lists */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Positive Emotions */}
@@ -371,7 +296,6 @@ const SettingsPage: React.FC = () => {
               ))}
             </div>
           </div>
-          
           {/* Negative Emotions */}
           <div>
             <h3 className="font-medium mb-3 text-red-400">Negative Emotions</h3>
@@ -403,6 +327,63 @@ const SettingsPage: React.FC = () => {
         </div>
       </div>
 
+      {/* Data Synchronization */}
+      <div className="bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-xl font-semibold mb-4 text-white">Data Synchronization</h2>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-gray-300">
+              Last synchronized: <span className="font-medium">{getFormattedSyncTime()}</span>
+            </p>
+            <p className="text-sm text-gray-400 mt-1">
+              Your data is automatically synced to the server when you make changes.
+            </p>
+          </div>
+          <button
+            onClick={handleManualSync}
+            disabled={syncStatus === 'syncing'}
+            className={`px-4 py-2 rounded-md text-white ${
+              syncStatus === 'syncing' 
+                ? 'bg-blue-600 opacity-70 cursor-wait' 
+                : syncStatus === 'success'
+                ? 'bg-green-600'
+                : syncStatus === 'error'
+                ? 'bg-red-600'
+                : 'bg-blue-600 hover:bg-blue-700'
+            }`}
+          >
+            {syncStatus === 'syncing' 
+              ? 'Syncing...' 
+              : syncStatus === 'success'
+              ? 'Sync Successful'
+              : syncStatus === 'error'
+              ? 'Sync Failed'
+              : 'Sync Now'}
+          </button>
+        </div>
+        <div className="text-sm text-gray-400">
+          <p>
+            Syncing ensures your data is backed up and available across all your devices.
+          </p>
+        </div>
+      </div>
+      {/* Onboarding Section */}
+      <div className="bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-xl font-semibold mb-4 text-white">Onboarding</h2>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-gray-300">
+              Restart the onboarding process to learn about RedButton's features.
+            </p>
+          </div>
+          <button
+            onClick={startOnboarding}
+            className="px-4 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700"
+          >
+            View Onboarding
+          </button>
+        </div>
+      </div>
       {/* Danger Zone */}
       <div className="mt-8 border-t border-gray-700 pt-6">
         <h2 className="text-xl font-semibold mb-4 text-red-400">Danger Zone</h2>
@@ -416,7 +397,6 @@ const SettingsPage: React.FC = () => {
           This will delete all your emotions, journal entries, actions, and goals. This action cannot be undone.
         </p>
       </div>
-
       {/* Debug Button */}
       {process.env.NODE_ENV === 'development' && (
         <div className="mt-4">

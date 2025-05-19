@@ -6,7 +6,8 @@ import {
   initiativeChat,
   uploadFileToOpenAI,
   handleOnboardingChat,
-  onboardingChat
+  onboardingChat,
+  getSuggestionExplanation
 } from '../controllers/ai.controller';
 import { requireAuth } from '../middleware/auth.middleware';
 
@@ -31,5 +32,8 @@ router.post('/initiative-chat', initiativeChat);
 router.post('/upload-file', uploadFileToOpenAI);
 
 router.post('/onboarding-chat', onboardingChat);
+
+// Route to get explanation for a suggestion
+router.post('/suggestion-explanation', getSuggestionExplanation);
 
 export default router; 

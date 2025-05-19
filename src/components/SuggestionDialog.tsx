@@ -99,7 +99,6 @@ const SuggestionDialog: React.FC = () => {
         data,
         emotionData.action
       );
-      
       setSuggestions(generatedSuggestions);
     } catch (error) {
       console.error('Error generating suggestions:', error);
@@ -126,6 +125,15 @@ const SuggestionDialog: React.FC = () => {
         if (emotion) {
           emotion.suggestionSelected = suggestionText;
           updateJournalEntry(journalEntryId, record.content);
+          
+          // Store for followup popup on next app open
+          window.localStorage.setItem('redbutton_followup', JSON.stringify({
+            entryId: journalEntryId,
+            timestamp: emotion.timestamp,
+            suggestion: suggestionText,
+            emotion: emotionData,
+            relatedItem: suggestion.relatedItem || null
+          }));
           
           // If the suggestion is related to a goal or initiative, add a check-in
           if (suggestion.relatedItem) {
@@ -247,6 +255,9 @@ const SuggestionDialog: React.FC = () => {
             loading={isLoading}
             selectedSuggestion={selectedSuggestion}
             onSelect={handleSuggestionSelect}
+            emotionName={emotionData?.name || ''}
+            emotionEmoji={emotionData?.emoji || ''}
+            isPositive={emotionData?.isPositive || false}
           />
         </div>
         

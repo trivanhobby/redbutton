@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useData } from './DataContext';
 
-export type OnboardingStep = 'animation' | 'flow' | 'welcome' | 'goals' | 'initiatives' | 'checkins' | 'journal' | 'calendar' | 'complete';
+export type OnboardingStep = 'animation' | 'flow' | 'prepareGoals' | 'chat' | 'subscription';
 
 interface OnboardingContextType {
   isOnboarding: boolean;
@@ -19,13 +19,9 @@ const OnboardingContext = createContext<OnboardingContextType | undefined>(undef
 export const ONBOARDING_STEPS: OnboardingStep[] = [
   'animation',
   'flow',
-  'welcome',
-  'goals',
-  'initiatives',
-  'checkins',
-  'journal',
-  'calendar',
-  'complete'
+  'prepareGoals',
+  'chat',
+  'subscription'
 ];
 
 export const OnboardingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

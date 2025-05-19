@@ -15,6 +15,8 @@ export interface EmotionRecord {
   action?: string; // For positive emotions: 'celebrate', 'journal', 'plan'
   timeInMinutes?: number;
   suggestionSelected?: string; // Track which suggestion was selected
+  followup?: string; // User's followup text after doing suggestion
+  feedback?: boolean | string; // true/false or emotion id
 }
 
 // Action entity

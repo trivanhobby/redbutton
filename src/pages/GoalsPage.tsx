@@ -894,6 +894,11 @@ const GoalsPage: React.FC = () => {
                               [goal.id]: e.target.value
                             }))}
                             onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey && newInitiativeTexts[goal.id]?.trim()) {
+                                e.preventDefault();
+                                handleAddInitiative(goal.id);
+                              }
+                            }}
                           />
                           <button
                             onClick={() => handleAddInitiative(goal.id)}

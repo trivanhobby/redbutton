@@ -398,3 +398,38 @@ export const sendOnboardingChatMessage = async (message: string): Promise<Readab
   }
   return response.body as ReadableStream<Uint8Array>;
 };
+
+// Get explanation for a suggestion
+export const getSuggestionExplanation = async (
+  suggestion: string,
+  emotionName: string,
+  isPositive: boolean,
+  relatedItem?: {
+    id: string;
+    type: 'goal' | 'initiative';
+    name: string;
+  }
+): Promise<string> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/ai/suggestion-explanation`, {
+      method: 'POST',
+      headers: createAuthHeaders(),
+      body: JSON.stringify({
+        suggestion,
+        emotionName,
+        isPositive,
+        relatedItem
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to get explanation');
+    }
+    
+    const responseData = await response.json();
+    return responseData.explanation;
+  } catch (error) {
+    console.error('Error getting suggestion explanation:', error);
+    return 'Sorry, I could not generate an explanation at this time.';
+  }
+};
