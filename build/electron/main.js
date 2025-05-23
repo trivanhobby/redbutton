@@ -72,19 +72,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 var electron_1 = require("electron");
 var path = __importStar(require("path"));
 var fs = __importStar(require("fs"));
-// Handle self-signed certificates in development
-if (process.env.NODE_ENV === 'development' || (process.env.REACT_APP_API_URL || "").includes('localhost')) {
-    electron_1.app.on('certificate-error', function (event, webContents, url, error, certificate, callback) {
-        // Only allow localhost certificates
-        if (url.startsWith('https://localhost:')) {
-            event.preventDefault();
-            callback(true);
-        }
-        else {
-            callback(false);
-        }
-    });
-}
 // Better isDev detection that works in production builds
 var isDev = (process.env.REACT_APP_API_URL || "").includes('localhost');
 var mainWindow = null;
@@ -265,6 +252,58 @@ function handleDeepLink(url) {
         logToFile("Failed to parse deep link URL: ".concat(error, ", URL: ").concat(actualUrl));
     }
 }
+// Helper: handle intercepted localhost URLs in production
+function handleInterceptedLocalhostUrl(url) {
+    try {
+        var urlObj = new URL(url);
+        if (urlObj.hostname === 'localhost') {
+            // List of supported paths
+            var supportedPaths = [
+                '/auth/google/callback',
+                '/subscription/success',
+                '/subscription/cancel',
+            ];
+            for (var _i = 0, supportedPaths_1 = supportedPaths; _i < supportedPaths_1.length; _i++) {
+                var routePath = supportedPaths_1[_i];
+                if (urlObj.pathname.startsWith(routePath)) {
+                    // Rebuild the hash route and query string
+                    var hashRoute = "#".concat(routePath);
+                    if (urlObj.search) {
+                        hashRoute += urlObj.search;
+                    }
+                    // Find the local index.html path
+                    var indexPath = '';
+                    var possiblePaths = [
+                        path.join(__dirname, '../build/index.html'),
+                        path.join(process.resourcesPath, 'build/index.html'),
+                        path.join(electron_1.app.getAppPath(), 'build/index.html'),
+                        path.join(electron_1.app.getPath('exe'), '../Resources/build/index.html'),
+                    ];
+                    for (var _a = 0, possiblePaths_2 = possiblePaths; _a < possiblePaths_2.length; _a++) {
+                        var testPath = possiblePaths_2[_a];
+                        if (fs.existsSync(testPath)) {
+                            indexPath = testPath;
+                            break;
+                        }
+                    }
+                    if (indexPath && mainWindow) {
+                        var localUrl = "file://".concat(indexPath).concat(hashRoute);
+                        logToFile("Intercepted ".concat(routePath, " navigation, loading local app: ").concat(localUrl));
+                        mainWindow.loadURL(localUrl);
+                    }
+                    else {
+                        logToFile('ERROR: Could not find index.html for intercepted localhost URL handling');
+                    }
+                    return true;
+                }
+            }
+        }
+    }
+    catch (e) {
+        logToFile('Error in handleInterceptedLocalhostUrl: ' + e);
+    }
+    return false;
+}
 function createWindow() {
     logToFile('Creating main window');
     // Create the browser window
@@ -277,9 +316,6 @@ function createWindow() {
             nodeIntegration: false,
             contextIsolation: true,
             preload: path.join(__dirname, 'preload.js'),
-            // Allow self-signed certificates in development
-            webSecurity: !isDev,
-            allowRunningInsecureContent: isDev
         },
         // titleBarStyle: 'hiddenInset', // For macOS style
         icon: path.join(__dirname, '../public/logo512.png'),
@@ -302,8 +338,8 @@ function createWindow() {
             path.join(electron_1.app.getPath('exe'), '../Resources/build/index.html'),
         ];
         logToFile('Checking possible paths for index.html:');
-        for (var _i = 0, possiblePaths_2 = possiblePaths; _i < possiblePaths_2.length; _i++) {
-            var testPath = possiblePaths_2[_i];
+        for (var _i = 0, possiblePaths_3 = possiblePaths; _i < possiblePaths_3.length; _i++) {
+            var testPath = possiblePaths_3[_i];
             logToFile("- Trying: ".concat(testPath));
             try {
                 if (fs.existsSync(testPath)) {
@@ -392,6 +428,19 @@ function createWindow() {
             }, 1000); // Small delay to ensure renderer is ready
         }
     });
+    // Intercept navigation to OAuth callback and subscription URLs in production
+    if (!isDev && mainWindow) {
+        mainWindow.webContents.on('will-navigate', function (event, url) {
+            if (handleInterceptedLocalhostUrl(url)) {
+                event.preventDefault();
+            }
+        });
+        mainWindow.webContents.on('did-fail-load', function (event, errorCode, errorDescription, validatedURL) {
+            if (handleInterceptedLocalhostUrl(validatedURL)) {
+                event.preventDefault();
+            }
+        });
+    }
     // NOTE: Widget creation is now handled in the app.whenReady() handler
 }
 // Add this function to check tray icon status
@@ -452,9 +501,6 @@ function createMenuBarWidget() {
             nodeIntegration: false,
             contextIsolation: true,
             preload: path.join(__dirname, 'preload.js'),
-            // Allow self-signed certificates in development
-            webSecurity: !isDev,
-            allowRunningInsecureContent: isDev
         },
     });
     // Determine the correct URL for the widget
@@ -473,8 +519,8 @@ function createMenuBarWidget() {
             path.join(electron_1.app.getPath('exe'), '../Resources/build/index.html'),
         ];
         logToFile('Checking possible paths for widget index.html:');
-        for (var _i = 0, possiblePaths_3 = possiblePaths; _i < possiblePaths_3.length; _i++) {
-            var testPath = possiblePaths_3[_i];
+        for (var _i = 0, possiblePaths_4 = possiblePaths; _i < possiblePaths_4.length; _i++) {
+            var testPath = possiblePaths_4[_i];
             try {
                 if (fs.existsSync(testPath)) {
                     indexPath = testPath;
@@ -653,8 +699,8 @@ function createMenuBarWidget() {
                             path.join(electron_1.app.getAppPath(), 'build/index.html'),
                             path.join(electron_1.app.getPath('exe'), '../Resources/build/index.html'),
                         ];
-                        for (var _i = 0, possiblePaths_4 = possiblePaths; _i < possiblePaths_4.length; _i++) {
-                            var testPath = possiblePaths_4[_i];
+                        for (var _i = 0, possiblePaths_5 = possiblePaths; _i < possiblePaths_5.length; _i++) {
+                            var testPath = possiblePaths_5[_i];
                             try {
                                 if (fs.existsSync(testPath)) {
                                     indexPath_1 = testPath;

@@ -133,99 +133,51 @@ const initialData: AppData = {
     },
     {
       id: 'g1',
-      text: 'Practice mindfulness for 10 minutes each day',
+      text: 'Onboard to a red button!',
       description: '',
       completed: false,
       createdAt: new Date().toISOString(),
     },
-    {
-      id: 'g2',
-      text: 'Complete one important task before checking email',
-      description: '',
-      completed: false,
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: 'g3',
-      text: 'Take a short walk after lunch',
-      description: 'Going for a walk helps with digestion and improves focus for the afternoon',
-      completed: false,
-      createdAt: new Date().toISOString(),
-    },
+
   ],
   initiatives: [
     {
       id: 'i1',
-      text: 'Try different meditation apps to find the best one',
+      text: 'Set up your goals!',
       completed: false,
       goalId: 'g1',
       createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
     },
     {
       id: 'i2',
-      text: 'Set up "Focus Time" blocks on calendar',
+      text: 'Journal frequently!',
       completed: true,
-      goalId: 'g2',
+      goalId: 'g1',
       createdAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
       completedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
     },
     {
       id: 'i3',
-      text: 'Find nearby parks or walking routes',
+      text: 'Track your emotions with the red button top bar widget!',
       completed: false,
-      goalId: 'g3',
+      goalId: 'g1',
+      createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 'i4',
+      text: 'Improve your happiness!',
+      completed: false,
+      goalId: 'g1',
       createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
     }
   ],
   checkIns: [
     {
       id: 'ci1',
-      content: 'Tried Headspace app today. The basic course seems promising.',
+      content: 'I have installed the red button and it is my first step to improve my happiness!',
       timestamp: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
       entityId: 'i1',
       entityType: 'initiative'
-    },
-    {
-      id: 'ci2',
-      content: 'Explored Calm app. The sleep stories are nice but meditation interface is not as intuitive as Headspace.',
-      timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-      entityId: 'i1',
-      entityType: 'initiative'
-    },
-    {
-      id: 'ci3',
-      content: 'Added two 1-hour focus blocks to my calendar for tomorrow.',
-      timestamp: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
-      entityId: 'i2',
-      entityType: 'initiative'
-    },
-    {
-      id: 'ci4',
-      content: 'Completed a full day using the focus time blocks. Got much more done than usual!',
-      timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      entityId: 'i2',
-      entityType: 'initiative'
-    },
-    {
-      id: 'ci5',
-      content: 'Found a great walking route through the nearby park. Takes about 20 minutes to complete.',
-      timestamp: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString(),
-      entityId: 'i3',
-      entityType: 'initiative'
-    },
-    {
-      id: 'ci6',
-      content: 'Making progress on the mindfulness practice. Completed 5 days in a row.',
-      timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      entityId: 'g1',
-      entityType: 'goal'
-    },
-    {
-      id: 'ci7',
-      content: 'Started using my walks to practice mindful attention to surroundings.',
-      timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-      entityId: 'g3',
-      entityType: 'goal'
     }
   ],
   settings: {
@@ -386,6 +338,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setData(serverData);
         }
       });
+    }
+    // eslint-disable-next-line
+  }, [isAuthenticated]);
+
+  // Reset data on logout
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setData(initialData);
     }
     // eslint-disable-next-line
   }, [isAuthenticated]);

@@ -1,6 +1,6 @@
 import { EmotionRecord, JournalEntry, Emotion, AppData } from '../context/DataContext';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || '';
 export interface EnhancedSuggestion {
   text: string;
   relatedItem?: {
@@ -386,7 +386,7 @@ export const syncUserData = async (
 };
 
 export const sendOnboardingChatMessage = async (message: string): Promise<ReadableStream<Uint8Array>> => {
-  const response = await fetch(`${API_BASE_URL}/api/ai/onboarding-chat`, {
+  const response = await fetch(`${API_BASE_URL}/ai/onboarding-chat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -432,4 +432,21 @@ export const getSuggestionExplanation = async (
     console.error('Error getting suggestion explanation:', error);
     return 'Sorry, I could not generate an explanation at this time.';
   }
+};
+
+export const exchangeOAuthToken = async (provider: string, token: string) => {
+  const response = await fetch(`${API_BASE_URL}/auth/oauth`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ provider, token }),
+  });
+
+  const data = await response.json();
+  if (!data.success) {
+    throw new Error(data.message || 'Failed to exchange OAuth token');
+  }
+
+  return data;
 };

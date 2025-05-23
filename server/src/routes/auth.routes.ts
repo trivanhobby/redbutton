@@ -8,10 +8,12 @@ import {
   getCurrentUser,
   generateInviteLink,
   facebookCallback,
-  appleCallback
+  appleCallback,
+  oauthLogin
 } from '../controllers/auth.controller';
 import { requireAuth, requireAdmin } from '../middleware/auth.middleware';
 import passport from 'passport';
+import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 
 const router = Router();
 
@@ -32,6 +34,8 @@ router.get(
   '/google',
   passport.authenticate('google', { 
     scope: ['profile', 'email'],
+    accessType: 'offline',
+    prompt: 'consent',
     session: false 
   })
 );
@@ -39,10 +43,22 @@ router.get(
 router.get(
   '/google/callback',
   passport.authenticate('google', { 
-    failureRedirect: '/login?error=google_auth_failed',
+    failureRedirect: `${process.env.CLIENT_URL}/auth/google/callback?error=google_auth_failed`,
     session: false 
   }),
-  googleCallback
+  (req, res) => {
+    console.log('Google callback - User:', req.user);
+    
+    const user = req.user as any;
+    if (!user || !user.token) {
+      console.error('No user or token in callback');
+      res.redirect(`${process.env.CLIENT_URL}/auth/google/callback?error=google_auth_failed`);
+      return;
+    }
+    
+    // Redirect to frontend with our JWT token
+    res.redirect(`${process.env.CLIENT_URL}/auth/google/callback?token=${user.token}`);
+  }
 );
 
 // Facebook OAuth routes
@@ -80,5 +96,8 @@ router.post(
   }),
   appleCallback
 );
+
+// OAuth token exchange endpoint
+router.post('/oauth', oauthLogin);
 
 export default router; 

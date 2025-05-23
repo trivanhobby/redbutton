@@ -9,6 +9,8 @@ import { Icon } from '@iconify/react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
+const API_BASE_URL = process.env.REACT_APP_API_URL!;
+
 const SettingsPage: React.FC = () => {
   const { data, updateSettings, addEmotion, removeEmotion } = useData();
   const { startOnboarding } = useOnboarding();
@@ -210,7 +212,7 @@ const SettingsPage: React.FC = () => {
     setRestoreMessage('');
     try {
       const token = localStorage.getItem('authToken');
-      const res = await fetch(process.env.REACT_APP_API_URL || 'https://localhost:4000/api/subscription/restore', {
+      const res = await fetch(API_BASE_URL + '/subscription/restore', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

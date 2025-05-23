@@ -46,7 +46,7 @@ export const useSubscription = () => {
 
     try {
       // Fetch products
-      const productsRes = await fetch(API_BASE_URL + '/api/subscription/products', {
+      const productsRes = await fetch(API_BASE_URL + '/subscription/products', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -56,7 +56,7 @@ export const useSubscription = () => {
       const productsData = await productsRes.json();
 
       // Fetch status
-      const statusRes = await fetch(API_BASE_URL + '/api/subscription/status', {
+      const statusRes = await fetch(API_BASE_URL + '/subscription/status', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -86,7 +86,7 @@ export const useSubscription = () => {
     if (!token) return null;
 
     try {
-      const res = await fetch(API_BASE_URL + '/api/subscription/create-session', {
+      const res = await fetch(API_BASE_URL + '/subscription/create-session', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

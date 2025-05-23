@@ -9,6 +9,9 @@ import { addDays } from 'date-fns';
 import crypto from 'crypto';
 import mongoose from 'mongoose';
 import { defaultEmotions, getDefaultUserData, getDefaultSettings } from '../utils/defaults';
+import { OAuth2Client } from 'google-auth-library';
+
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // Login with email and password
 export const login = async (req: Request, res: Response): Promise<void> => {
@@ -520,4 +523,97 @@ export const appleCallback = (req: Request, res: Response): void => {
   }
   const token = generateToken(req.user as IUser);
   res.redirect(`${process.env.CLIENT_URL}/auth/apple/callback?token=${token}`);
+};
+
+// OAuth login/register handler
+export const oauthLogin = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { provider, token } = req.body;
+
+    if (!provider || !token) {
+      res.status(400).json({
+        success: false,
+        message: 'Provider and token are required'
+      });
+      return;
+    }
+
+    let userInfo;
+    // Verify token with provider and get user info
+    switch (provider) {
+      case 'google':
+        // Verify Google token and get user info
+        const ticket = await client.verifyIdToken({
+          idToken: token,
+          audience: process.env.GOOGLE_CLIENT_ID
+        });
+        const payload = ticket.getPayload();
+        if (!payload) {
+          throw new Error('Invalid Google token');
+        }
+        userInfo = {
+          email: payload.email,
+          name: payload.name,
+          picture: payload.picture,
+          provider: 'google'
+        };
+        break;
+      // Add other providers here (Facebook, Apple, etc.)
+      default:
+        res.status(400).json({
+          success: false,
+          message: 'Unsupported provider'
+        });
+        return;
+    }
+
+    // Find or create user
+    let user = await User.findOne({ email: userInfo.email });
+    
+    if (!user) {
+      // Create new user
+      user = new User({
+        email: userInfo.email,
+        name: userInfo.name,
+        picture: userInfo.picture,
+        status: 'active',
+        role: 'user',
+        oauthProvider: userInfo.provider
+      });
+      await user.save();
+
+      // Initialize user data
+      if (user._id) {
+        await initializeUserData(user._id.toString());
+      }
+    } else if (user.status !== 'active') {
+      res.status(403).json({
+        success: false,
+        message: 'Your account is not active'
+      });
+      return;
+    }
+
+    // Generate JWT token
+    const jwtToken = generateToken(user);
+
+    // Return user info and token
+    res.status(200).json({
+      success: true,
+      token: jwtToken,
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        picture: user.picture,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error('OAuth login error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error during OAuth authentication'
+    });
+  }
 }; 

@@ -1,6 +1,6 @@
 import passport from 'passport';
 import { Strategy as JwtStrategy, ExtractJwt } from 'passport-jwt';
-import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
+import { Strategy as GoogleStrategy, Profile } from 'passport-google-oauth20';
 // import { Strategy as FacebookStrategy } from 'passport-facebook';
 // import AppleStrategy from 'passport-apple';
 // import type { VerifyFunction as FacebookVerifyFunction } from 'passport-facebook';
@@ -8,6 +8,8 @@ import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import dotenv from 'dotenv';
 import User from '../models/user.model';
 import { initializeUserData } from '../controllers/auth.controller';
+import { Request } from 'express';
+import { generateToken } from '../utils/jwt';
 
 dotenv.config();
 
@@ -40,47 +42,63 @@ passport.use(
 const googleOptions = {
   clientID: process.env.GOOGLE_CLIENT_ID || '',
   clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-  callbackURL: process.env.GOOGLE_CALLBACK_URL || ''
+  callbackURL: process.env.GOOGLE_CALLBACK_URL || '',
+  passReqToCallback: true as const,
+  scope: ['profile', 'email']
 };
 
 passport.use(
-  new GoogleStrategy(googleOptions, async (accessToken, refreshToken, profile, done) => {
+  new GoogleStrategy(googleOptions, async (
+    req: Request,
+    accessToken: string,
+    refreshToken: string,
+    profile: Profile,
+    done: (error: any, user?: any) => void
+  ) => {
     try {
-      // Check if user exists in our database
-      let user = await User.findOne({ email: profile.emails?.[0]?.value });
-      
-      if (user) {
-        // If user exists, check if they have a Google ID
-        if (!user.googleId) {
-          // Update user with Google ID
-          user.googleId = profile.id;
-          user.name = user.name || profile.displayName;
-          user.picture = user.picture || profile.photos?.[0]?.value;
-          await user.save();
-        }
-        return done(null, user);
-      } else {
-        // Create new user without requiring invitation
-        const newUser = new User({
-          email: profile.emails?.[0]?.value,
-          googleId: profile.id,
-          name: profile.displayName,
-          picture: profile.photos?.[0]?.value,
-          status: 'active',
-          role: 'user'
-        });
-        
-        await newUser.save();
-        
-        // Initialize user data with default values
-        if (newUser._id) {
-          await initializeUserData(newUser._id.toString());
-        }
-        
-        return done(null, newUser);
+      console.log('Google strategy - Profile:', profile);
+      // Get email from profile
+      const email = profile.emails?.[0].value;
+      if (!email) {
+        console.error('No email in Google profile');
+        return done(new Error('No email received from Google'));
       }
+
+      // Find or create user
+      let user = await User.findOne({ email });
+      
+      if (!user) {
+        user = new User({
+          email,
+          name: profile.displayName,
+          picture: profile.photos?.[0].value,
+          status: 'active',
+          role: 'user',
+          oauthProvider: 'google',
+          googleId: profile.id
+        });
+        await user.save();
+      } else if (!user.googleId) {
+        // Update existing user with Google ID if not set
+        user.googleId = profile.id;
+        user.name = user.name || profile.displayName;
+        user.picture = user.picture || profile.photos?.[0].value;
+        await user.save();
+      }
+      
+      // Generate our JWT token here since we have the user
+      const token = generateToken(user);
+      
+      // Add the token to the user object
+      const userWithToken = {
+        ...user.toObject(),
+        token
+      };
+      
+      return done(null, userWithToken);
     } catch (error) {
-      return done(error, false);
+      console.error('Google strategy error:', error);
+      return done(error as Error);
     }
   })
 );

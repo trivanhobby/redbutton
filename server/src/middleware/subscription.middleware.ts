@@ -32,6 +32,8 @@ export const requireSubscription = (endpointType: 'chat' | 'suggestions' | 'jour
         next();
         return;
       }
+      next();
+      return;
 
       // For non-subscribers, return generic responses based on endpoint type
       switch (endpointType) {

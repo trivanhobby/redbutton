@@ -95,7 +95,7 @@ export const streamChatResponse = async (
           }).join(' ')
     }));
     
-    const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000/api';
+    const API_BASE_URL = process.env.REACT_APP_API_URL || '';
     
     // Create the EventSource for server-sent events
     const response = await fetch(`${API_BASE_URL}/ai/initiative-chat`, {

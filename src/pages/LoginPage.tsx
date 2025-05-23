@@ -95,7 +95,7 @@ const LoginPage: React.FC = () => {
           >
             <Icon icon="flat-color-icons:google" className="h-6 w-6" />
           </button>
-          <button
+          {/* <button
             className="flex items-center justify-center bg-[#1877f2] text-white p-3 rounded-full hover:bg-[#145db2] border border-[#1877f2]"
             onClick={() => window.location.href = `${API_BASE_URL}/auth/facebook`}
             aria-label="Sign in with Facebook"
@@ -108,7 +108,7 @@ const LoginPage: React.FC = () => {
             aria-label="Sign in with Apple"
           >
             <Icon icon="logos:apple" className="h-6 w-6" />
-          </button>
+          </button> */}
         </div>
 
         <div className="mt-6 text-center">

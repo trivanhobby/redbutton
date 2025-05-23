@@ -2,18 +2,6 @@ import { app, BrowserWindow, ipcMain, Tray, nativeImage, Notification, Menu, scr
 import * as path from 'path';
 import * as fs from 'fs';
 
-// Handle self-signed certificates in development
-if (process.env.NODE_ENV === 'development' || (process.env.REACT_APP_API_URL || "").includes('localhost')) {
-  app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
-    // Only allow localhost certificates
-    if (url.startsWith('https://localhost:')) {
-      event.preventDefault();
-      callback(true);
-    } else {
-      callback(false);
-    }
-  });
-}
 
 // Better isDev detection that works in production builds
 const isDev = (process.env.REACT_APP_API_URL || "").includes('localhost')
@@ -224,6 +212,55 @@ function handleDeepLink(url: string | string[]) {
   }
 }
 
+// Helper: handle intercepted localhost URLs in production
+function handleInterceptedLocalhostUrl(url: string) {
+  try {
+    const urlObj = new URL(url);
+    if (urlObj.hostname === 'localhost') {
+      // List of supported paths
+      const supportedPaths = [
+        '/auth/google/callback',
+        '/subscription/success',
+        '/subscription/cancel',
+      ];
+      for (const routePath of supportedPaths) {
+        if (urlObj.pathname.startsWith(routePath)) {
+          // Rebuild the hash route and query string
+          let hashRoute = `#${routePath}`;
+          if (urlObj.search) {
+            hashRoute += urlObj.search;
+          }
+          // Find the local index.html path
+          let indexPath = '';
+          const possiblePaths = [
+            path.join(__dirname, '../build/index.html'),
+            path.join(process.resourcesPath, 'build/index.html'),
+            path.join(app.getAppPath(), 'build/index.html'),
+            path.join(app.getPath('exe'), '../Resources/build/index.html'),
+          ];
+          for (const testPath of possiblePaths) {
+            if (fs.existsSync(testPath)) {
+              indexPath = testPath;
+              break;
+            }
+          }
+          if (indexPath && mainWindow) {
+            const localUrl = `file://${indexPath}${hashRoute}`;
+            logToFile(`Intercepted ${routePath} navigation, loading local app: ${localUrl}`);
+            mainWindow.loadURL(localUrl);
+          } else {
+            logToFile('ERROR: Could not find index.html for intercepted localhost URL handling');
+          }
+          return true;
+        }
+      }
+    }
+  } catch (e) {
+    logToFile('Error in handleInterceptedLocalhostUrl: ' + e);
+  }
+  return false;
+}
+
 function createWindow() {
   logToFile('Creating main window');
   
@@ -237,9 +274,6 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      // Allow self-signed certificates in development
-      webSecurity: !isDev,
-      allowRunningInsecureContent: isDev
     },
     // titleBarStyle: 'hiddenInset', // For macOS style
     icon: path.join(__dirname, '../public/logo512.png'),
@@ -410,6 +444,20 @@ Arch: ${process.arch}
     }
   });
 
+  // Intercept navigation to OAuth callback and subscription URLs in production
+  if (!isDev && mainWindow) {
+    mainWindow.webContents.on('will-navigate', (event, url) => {
+      if (handleInterceptedLocalhostUrl(url)) {
+        event.preventDefault();
+      }
+    });
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+      if (handleInterceptedLocalhostUrl(validatedURL)) {
+        event.preventDefault();
+      }
+    });
+  }
+
   // NOTE: Widget creation is now handled in the app.whenReady() handler
 }
 
@@ -480,9 +528,6 @@ function createMenuBarWidget() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      // Allow self-signed certificates in development
-      webSecurity: !isDev,
-      allowRunningInsecureContent: isDev
     },
   });
 

@@ -12,6 +12,7 @@
     "electron:dev_local": "REACT_APP_API_URL=http://localhost:4000/api concurrently \"cross-env BROWSER=none npm start\" \"wait-on http://localhost:3000 && tsc -p electron/tsconfig.json && electron .\"",
     "electron:build": "npm run build && electron-builder",
     "electron:build:mac": "cross-env ELECTRON_IS_DEV=0 NODE_ENV=production npm run build && cross-env ELECTRON_IS_DEV=0 NODE_ENV=production electron-builder --mac",
+    "electron:prod": "npm run build && cross-env NODE_ENV=production electron .",
     "postinstall": "electron-builder install-app-deps",
     "generate-icon": "npx svgexport public/assets/menubar-icon.svg public/menubar-icon.png 2x"
   },
