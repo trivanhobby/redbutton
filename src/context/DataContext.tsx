@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { format } from 'date-fns';
-import { syncDataToServer } from '../utils/syncData';
+import { syncDataToServer, syncDataFromServer } from '../utils/syncData';
+import { useAuth } from './AuthContext';
 
 // Types for our data
 export interface Emotion {
@@ -331,14 +332,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Sync tracking to prevent infinite loops
   const isSyncing = useRef(false);
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isAuthenticated = useRef(!!localStorage.getItem('authToken'));
+  const { isAuthenticated } = useAuth();
 
   // Save data to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem('redButtonData', JSON.stringify(data));
     
     // Don't sync if we're already syncing or not authenticated
-    if (isSyncing.current || !isAuthenticated.current) {
+    if (isSyncing.current || !isAuthenticated) {
       return;
     }
     
@@ -349,7 +350,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
     syncTimeoutRef.current = setTimeout(() => {
       // Only sync if we're authenticated
-      if (isAuthenticated.current) {
+      if (isAuthenticated) {
         isSyncing.current = true;
         
         syncDataToServer(data)
@@ -375,30 +376,19 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         clearTimeout(syncTimeoutRef.current);
       }
     };
-  }, [data]);
+  }, [data, isAuthenticated]);
 
-  // Check authentication status on mount and set up listener
+  // Fetch latest data from server after login
   useEffect(() => {
-    const checkAuth = () => {
-      isAuthenticated.current = !!localStorage.getItem('authToken');
-    };
-    
-    // Initial check
-    checkAuth();
-    
-    // Listen for storage events (auth token changes)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'authToken') {
-        checkAuth();
-      }
-    };
-    
-    window.addEventListener('storage', handleStorageChange);
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, []);
+    if (isAuthenticated) {
+      syncDataFromServer().then(serverData => {
+        if (serverData) {
+          setData(serverData);
+        }
+      });
+    }
+    // eslint-disable-next-line
+  }, [isAuthenticated]);
 
   // Functions to manipulate data
   const addEmotion = (emotion: Omit<Emotion, 'id'>) => {

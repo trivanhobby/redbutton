@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import * as api from '../utils/api';
+import { setAuthToken, getCurrentUser } from '../utils/api';
 
 interface User {
   id: string;
@@ -16,6 +17,7 @@ interface AuthContextType {
   register: (email: string, password: string, inviteToken: string) => Promise<void>;
   logout: () => Promise<void>;
   verifyInvite: (token: string) => Promise<boolean>;
+  setToken: (token: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -92,6 +94,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const setToken = async (token: string) => {
+    setAuthToken(token);
+    setIsLoading(true);
+    try {
+      const userData = await getCurrentUser();
+      setUser(userData.user);
+    } catch (error) {
+      setUser(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -101,7 +116,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         login,
         register,
         logout,
-        verifyInvite
+        verifyInvite,
+        setToken
       }}
     >
       {children}

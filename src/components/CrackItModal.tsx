@@ -105,7 +105,7 @@ const CrackItModal: React.FC<CrackItModalProps> = ({ goal, initiative, onClose }
       formData.append('file', file);
       
       // Get the base API URL
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000/api';
+      const API_BASE_URL = process.env.REACT_APP_API_URL!;
       
       // Create headers with auth token if available
       const headers: HeadersInit = {};

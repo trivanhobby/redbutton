@@ -24,7 +24,7 @@ const AdminPage: React.FC = () => {
     setInviteToken(null);
     
     try {
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000/api';
+      const API_BASE_URL = process.env.REACT_APP_API_URL || '';
       
       const response = await fetch(`${API_BASE_URL}/auth/admin/generate-invite`, {
         method: 'POST',

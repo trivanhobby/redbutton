@@ -10,7 +10,7 @@ export interface EnhancedSuggestion {
   };
 }
 // Helper function to get auth token from localStorage
-const getAuthToken = (): string | null => {
+export const getAuthToken = (): string | null => {
   return localStorage.getItem('authToken');
 };
 

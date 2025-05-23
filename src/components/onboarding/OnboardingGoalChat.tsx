@@ -113,7 +113,7 @@ const OnboardingGoalChat: React.FC<OnboardingGoalChatProps> = ({ selectedGoalId 
 
     try {
       // Streaming API call
-      const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000/api';
+      const API_BASE_URL = process.env.REACT_APP_API_URL!;
       const response = await fetch(`${API_BASE_URL}/ai/onboarding-chat`, {
         method: 'POST',
         headers: {

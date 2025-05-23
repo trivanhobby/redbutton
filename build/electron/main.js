@@ -72,10 +72,21 @@ Object.defineProperty(exports, "__esModule", { value: true });
 var electron_1 = require("electron");
 var path = __importStar(require("path"));
 var fs = __importStar(require("fs"));
+// Handle self-signed certificates in development
+if (process.env.NODE_ENV === 'development' || (process.env.REACT_APP_API_URL || "").includes('localhost')) {
+    electron_1.app.on('certificate-error', function (event, webContents, url, error, certificate, callback) {
+        // Only allow localhost certificates
+        if (url.startsWith('https://localhost:')) {
+            event.preventDefault();
+            callback(true);
+        }
+        else {
+            callback(false);
+        }
+    });
+}
 // Better isDev detection that works in production builds
-var isDev = process.env.ELECTRON_IS_DEV === '1' ||
-    !(electron_1.app && electron_1.app.isPackaged) ||
-    process.env.NODE_ENV === 'development';
+var isDev = (process.env.REACT_APP_API_URL || "").includes('localhost');
 var mainWindow = null;
 var tray = null;
 var emotionWindow = null;
@@ -266,6 +277,9 @@ function createWindow() {
             nodeIntegration: false,
             contextIsolation: true,
             preload: path.join(__dirname, 'preload.js'),
+            // Allow self-signed certificates in development
+            webSecurity: !isDev,
+            allowRunningInsecureContent: isDev
         },
         // titleBarStyle: 'hiddenInset', // For macOS style
         icon: path.join(__dirname, '../public/logo512.png'),
@@ -438,6 +452,9 @@ function createMenuBarWidget() {
             nodeIntegration: false,
             contextIsolation: true,
             preload: path.join(__dirname, 'preload.js'),
+            // Allow self-signed certificates in development
+            webSecurity: !isDev,
+            allowRunningInsecureContent: isDev
         },
     });
     // Determine the correct URL for the widget
@@ -1026,6 +1043,16 @@ function checkTrayStatusAfterStartup() {
 // Handle app ready
 electron_1.app.whenReady().then(function () { return __awaiter(void 0, void 0, void 0, function () {
     return __generator(this, function (_a) {
+        if (process.env.NODE_ENV === 'development') {
+            electron_1.session.defaultSession.setCertificateVerifyProc(function (request, callback) {
+                if (request.hostname === 'localhost') {
+                    callback(0); // 0 = OK
+                }
+                else {
+                    callback(-3); // -3 = use default verification
+                }
+            });
+        }
         // First set up logging to capture all events
         setupLogging();
         logToFile('App ready event fired');

@@ -79,39 +79,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, password, inviteToken } = req.body;
-    
-    // Validate invite token
-    if (!inviteToken) {
-      res.status(400).json({
-        success: false,
-        message: 'Invite token is required'
-      });
-      return;
-    }
-    
-    // Find user with invite token
-    const invitedUser = await User.findOne({ 
-      inviteToken,
-      status: 'invited'
-    });
-    
-    if (!invitedUser) {
-      res.status(404).json({
-        success: false,
-        message: 'Invalid invite token or already used'
-      });
-      return;
-    }
-    
-    // Check if token is expired
-    if (invitedUser.inviteExpires && invitedUser.inviteExpires < new Date()) {
-      res.status(400).json({
-        success: false,
-        message: 'Invite token has expired'
-      });
-      return;
-    }
-    
+
     // Validate password
     if (!password || password.length < 8) {
       res.status(400).json({
@@ -120,36 +88,106 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       });
       return;
     }
-    
+
+    // If inviteToken is present, use old flow
+    if (inviteToken) {
+      // Find user with invite token
+      const invitedUser = await User.findOne({ 
+        inviteToken,
+        status: 'invited'
+      });
+      
+      if (!invitedUser) {
+        res.status(404).json({
+          success: false,
+          message: 'Invalid invite token or already used'
+        });
+        return;
+      }
+      
+      // Check if token is expired
+      if (invitedUser.inviteExpires && invitedUser.inviteExpires < new Date()) {
+        res.status(400).json({
+          success: false,
+          message: 'Invite token has expired'
+        });
+        return;
+      }
+      
+      // Hash password
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
+      
+      // Update user status and set password
+      invitedUser.password = hashedPassword;
+      invitedUser.status = 'active';
+      invitedUser.inviteToken = undefined;
+      invitedUser.inviteExpires = undefined;
+      
+      await invitedUser.save();
+      
+      // Initialize user data with default values
+      if (invitedUser._id) {
+        await initializeUserData(invitedUser._id.toString());
+      }
+      
+      // Generate JWT token
+      const token = generateToken(invitedUser);
+      
+      res.status(201).json({
+        success: true,
+        message: 'User registered successfully',
+        token,
+        user: {
+          id: invitedUser._id,
+          email: invitedUser.email,
+          name: invitedUser.name,
+          role: invitedUser.role
+        }
+      });
+      return;
+    }
+
+    // Open registration: check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser && existingUser.status === 'active') {
+      res.status(400).json({
+        success: false,
+        message: 'User already exists and is active'
+      });
+      return;
+    }
+
     // Hash password
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
-    
-    // Update user status and set password
-    invitedUser.password = hashedPassword;
-    invitedUser.status = 'active';
-    invitedUser.inviteToken = undefined;
-    invitedUser.inviteExpires = undefined;
-    
-    await invitedUser.save();
-    
+
+    // Create new user
+    const newUser = new User({
+      email,
+      password: hashedPassword,
+      status: 'active',
+      role: 'user'
+    });
+    await newUser.save();
+
     // Initialize user data with default values
-    if (invitedUser._id) {
-      await initializeUserData(invitedUser._id.toString());
+    if (newUser._id) {
+      await initializeUserData(newUser._id.toString());
     }
-    
+
     // Generate JWT token
-    const token = generateToken(invitedUser);
-    
+    const token = generateToken(newUser);
+
     res.status(201).json({
       success: true,
       message: 'User registered successfully',
       token,
       user: {
-        id: invitedUser._id,
-        email: invitedUser.email,
-        name: invitedUser.name,
-        role: invitedUser.role
+        id: newUser._id,
+        email: newUser.email,
+        name: newUser.name,
+        role: newUser.role
       }
     });
   } catch (error) {
@@ -350,7 +388,7 @@ export const getCurrentUser = async (req: Request, res: Response): Promise<void>
 };
 
 // Initialize a new user's data with defaults
-const initializeUserData = async (userId: mongoose.Types.ObjectId | string): Promise<void> => {
+export const initializeUserData = async (userId: mongoose.Types.ObjectId | string): Promise<void> => {
   try {
     // Convert userId to ObjectId if it's a string
     const userIdObj = typeof userId === 'string' 
@@ -462,4 +500,24 @@ export const generateInviteLink = async (req: Request, res: Response): Promise<v
       message: 'Error generating invite'
     });
   }
+};
+
+// Facebook OAuth callback
+export const facebookCallback = (req: Request, res: Response): void => {
+  if (!req.user) {
+    res.redirect(`${process.env.CLIENT_URL}/login?error=facebook_auth_failed`);
+    return;
+  }
+  const token = generateToken(req.user as IUser);
+  res.redirect(`${process.env.CLIENT_URL}/auth/facebook/callback?token=${token}`);
+};
+
+// Apple OAuth callback
+export const appleCallback = (req: Request, res: Response): void => {
+  if (!req.user) {
+    res.redirect(`${process.env.CLIENT_URL}/login?error=apple_auth_failed`);
+    return;
+  }
+  const token = generateToken(req.user as IUser);
+  res.redirect(`${process.env.CLIENT_URL}/auth/apple/callback?token=${token}`);
 }; 

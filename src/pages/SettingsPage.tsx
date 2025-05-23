@@ -4,10 +4,15 @@ import { motion } from 'framer-motion';
 import EmojiPicker, { Theme } from 'emoji-picker-react';
 import { syncDataToServer, syncDataFromServer } from '../utils/syncData';
 import { useOnboarding } from '../context/OnboardingContext';
+import { useSubscription } from '../hooks/useSubscription';
+import { Icon } from '@iconify/react';
+import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const SettingsPage: React.FC = () => {
   const { data, updateSettings, addEmotion, removeEmotion } = useData();
   const { startOnboarding } = useOnboarding();
+  const { products, status, isLoading, error, createCheckoutSession, refresh } = useSubscription();
   const [apiKey, setApiKey] = useState('');
   const [apiKeyStatus, setApiKeyStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [newEmotion, setNewEmotion] = useState({ name: '', isPositive: true, emoji: '' });
@@ -17,6 +22,10 @@ const SettingsPage: React.FC = () => {
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState('');
   const [showSyncToast, setShowSyncToast] = useState(false);
+  const [restoreStatus, setRestoreStatus] = useState<'idle' | 'restoring' | 'success' | 'error'>('idle');
+  const [restoreMessage, setRestoreMessage] = useState('');
+  const { logout } = useAuth();
+  const navigate = useNavigate();
   
   // Set the initial input value based on whether a key exists
   useEffect(() => {
@@ -179,6 +188,57 @@ const SettingsPage: React.FC = () => {
     }
   };
 
+  const handleSubscribe = async (productId: string) => {
+    const url = await createCheckoutSession(productId);
+    if (url) {
+      window.location.href = url;
+    }
+  };
+
+  // Format subscription end date
+  const formatSubscriptionEnd = (date: string | null) => {
+    if (!date) return 'N/A';
+    return new Date(date).toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  const handleRestore = async () => {
+    setRestoreStatus('restoring');
+    setRestoreMessage('');
+    try {
+      const token = localStorage.getItem('authToken');
+      const res = await fetch(process.env.REACT_APP_API_URL || 'https://localhost:4000/api/subscription/restore', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setRestoreStatus('success');
+        setRestoreMessage('Subscription restored!');
+        refresh();
+      } else {
+        setRestoreStatus('error');
+        setRestoreMessage(data.message || 'No active subscription found.');
+        refresh();
+      }
+    } catch (e) {
+      setRestoreStatus('error');
+      setRestoreMessage('Failed to restore subscription.');
+    }
+    setTimeout(() => setRestoreStatus('idle'), 3000);
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
+
   return (
     <div className="max-w-4xl mx-auto text-gray-200 relative">
       {/* Toast Notification */}
@@ -197,6 +257,90 @@ const SettingsPage: React.FC = () => {
 
       <h1 className="text-3xl font-bold mb-6 text-white">Settings</h1>
       
+      {/* Subscription Section */}
+      <div className="bg-gray-800 rounded-lg shadow-md p-6 mb-6">
+        <h2 className="text-xl font-semibold mb-4 text-white">Subscription</h2>
+        {/* Restore purchases button and toast */}
+        {restoreStatus !== 'idle' && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className={`mb-4 px-4 py-2 rounded-md shadow text-white ${restoreStatus === 'success' ? 'bg-green-600' : 'bg-red-600'}`}
+          >
+            {restoreMessage}
+          </motion.div>
+        )}
+        
+        {isLoading ? (
+          <div className="flex items-center justify-center py-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        ) : error ? (
+          <div className="text-red-500 mb-4">{error}</div>
+        ) : status?.isSubscribed ? (
+          <div className="space-y-4">
+            <div className="bg-green-900/30 border border-green-800 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-green-400 mb-2">
+                <Icon icon="mdi:check-circle" className="text-xl" />
+                <span className="font-semibold">Active Subscription</span>
+              </div>
+              <div className="text-sm text-gray-300">
+                <p>Plan: {status.subscriptionType === 'monthly' ? 'Monthly' : 'Yearly'}</p>
+                <p>Valid until: {formatSubscriptionEnd(status.subscriptionEnd)}</p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <p className="text-gray-300">
+              Subscribe to unlock all features and get personalized AI assistance.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Monthly Plan */}
+              <div className="bg-gray-700/50 border border-gray-600 rounded-lg p-6">
+                <h3 className="text-xl font-semibold mb-2">{products.monthly.name}</h3>
+                <p className="text-gray-300 mb-4">{products.monthly.description}</p>
+                <div className="text-sm text-gray-400 mb-4">
+                  {products.monthly.trialDays}-day free trial
+                </div>
+                <button
+                  onClick={() => handleSubscribe(products.monthly.id)}
+                  className="w-full px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors"
+                >
+                  Subscribe Monthly
+                </button>
+              </div>
+
+              {/* Yearly Plan */}
+              <div className="bg-gray-700/50 border border-gray-600 rounded-lg p-6">
+                <h3 className="text-xl font-semibold mb-2">{products.yearly.name}</h3>
+                <p className="text-gray-300 mb-4">{products.yearly.description}</p>
+                <div className="text-sm text-gray-400 mb-4">
+                  {products.yearly.trialDays}-day free trial
+                </div>
+                <button
+                  onClick={() => handleSubscribe(products.yearly.id)}
+                  className="w-full px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors"
+                >
+                  Subscribe Yearly
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        {/* Restore button always visible */}
+        <div className="mt-4 flex justify-center">
+          <button
+            onClick={handleRestore}
+            disabled={restoreStatus === 'restoring'}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-60"
+          >
+            {restoreStatus === 'restoring' ? 'Restoring...' : 'Restore My Purchases'}
+          </button>
+        </div>
+      </div>
+
       {/* Emotion Settings */}
       <div className="bg-gray-800 rounded-lg shadow-md p-6">
         <div className="flex justify-between items-center mb-4">
@@ -411,6 +555,16 @@ const SettingsPage: React.FC = () => {
           </p>
         </div>
       )}
+
+      {/* Logout Button */}
+      <div className="mt-8 flex justify-center">
+        <button
+          onClick={handleLogout}
+          className="px-6 py-2 bg-red-700 text-white rounded-md hover:bg-red-800 font-semibold"
+        >
+          Log out
+        </button>
+      </div>
     </div>
   );
 };

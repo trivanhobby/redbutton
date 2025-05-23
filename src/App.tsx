@@ -18,6 +18,7 @@ import WidgetPage from './pages/WidgetPage';
 import LoginPage from './pages/LoginPage';
 import RegistrationPage from './pages/RegistrationPage';
 import AdminPage from './pages/AdminPage';
+import OAuthCallback from './pages/OAuthCallback';
 
 // Components
 import SuggestionDialog from './components/SuggestionDialog';
@@ -28,7 +29,7 @@ import FollowupDialog from './components/FollowupDialog';
 const AppContent: React.FC = () => {
   const location = useLocation();
   const { data, updateSettings } = useData();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, setToken } = useAuth();
   
   // Check if we're on the widget route
   const isWidget = location.pathname === '/widget' || location.hash === '#/widget';
@@ -37,6 +38,18 @@ const AppContent: React.FC = () => {
   if (isWidget) {
     return <WidgetPage />;
   }
+
+  // Universal token handler: check for ?token=... in the URL and auto-login
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    if (token) {
+      setToken(token).then(() => {
+        window.history.replaceState({}, document.title, window.location.pathname); // Clean up URL
+      });
+    }
+    // eslint-disable-next-line
+  }, []);
 
   return (
     <>
@@ -67,6 +80,7 @@ const AppContent: React.FC = () => {
           </Route>
           
           <Route path="/widget" element={<WidgetPage />} />
+          <Route path="/auth/google/callback" element={<OAuthCallback />} />
         </Routes>
       </motion.div>
       

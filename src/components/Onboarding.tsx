@@ -6,6 +6,7 @@ import OnboardingAnimation from './onboarding/OnboardingAnimation';
 import OnboardingOverview from './onboarding/OnboardingOverview';
 import OnboardingGoalChat from './onboarding/OnboardingGoalChat';
 import { useNavigate } from 'react-router-dom';
+import { useSubscription } from '../hooks/useSubscription';
 
 type OnboardingStepProps = {
   title: string;
@@ -34,6 +35,7 @@ const Onboarding: React.FC = () => {
     prevStep 
   } = useOnboarding();
   const navigate = useNavigate();
+  const { products, status, isLoading, error, createCheckoutSession } = useSubscription();
 
   if (!isOnboarding) {
     return null;
@@ -74,6 +76,13 @@ const Onboarding: React.FC = () => {
   if (String(currentStep) === 'chat') {
     popupClass = 'bg-card rounded-lg shadow-xl max-w-6xl w-full max-h-[98vh] m-4 overflow-y-auto';
   }
+
+  const handleSubscribe = async (productId: string) => {
+    const url = await createCheckoutSession(productId);
+    if (url) {
+      window.location.href = url;
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -139,20 +148,53 @@ const Onboarding: React.FC = () => {
                 <div className="flex flex-col items-center text-center">
                   <h2 className="text-2xl font-bold mb-4">{stepContent.subscription?.title}</h2>
                   <p className="text-muted-foreground mb-8 max-w-xl mx-auto">{stepContent.subscription?.description}</p>
-                  <div className="w-full flex flex-col sm:flex-row gap-4 justify-center">
-                    <button
-                      className="px-6 py-3 bg-primary text-white rounded-md hover:bg-opacity-90 text-lg font-semibold"
-                      onClick={finishAndGoToGoals}
-                    >
-                      Subscribe
-                    </button>
-                    <button
-                      className="px-6 py-3 bg-gray-700 text-white rounded-md hover:bg-gray-600 text-lg font-semibold"
-                      onClick={finishAndGoToGoals}
-                    >
-                      I'm good
-                    </button>
-                  </div>
+                  
+                  {isLoading ? (
+                    <div className="flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                    </div>
+                  ) : error ? (
+                    <div className="text-red-500 mb-4">{error}</div>
+                  ) : (
+                    <div className="w-full max-w-2xl grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Monthly Plan */}
+                      <div className="bg-card border border-border rounded-lg p-6 flex flex-col">
+                        <h3 className="text-xl font-semibold mb-2">{products.monthly.name}</h3>
+                        <p className="text-muted-foreground mb-4 flex-grow">{products.monthly.description}</p>
+                        <div className="text-sm text-muted-foreground mb-4">
+                          {products.monthly.trialDays}-day free trial
+                        </div>
+                        <button
+                          onClick={() => handleSubscribe(products.monthly.id)}
+                          className="w-full px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors"
+                        >
+                          Subscribe Monthly
+                        </button>
+                      </div>
+
+                      {/* Yearly Plan */}
+                      <div className="bg-card border border-border rounded-lg p-6 flex flex-col">
+                        <h3 className="text-xl font-semibold mb-2">{products.yearly.name}</h3>
+                        <p className="text-muted-foreground mb-4 flex-grow">{products.yearly.description}</p>
+                        <div className="text-sm text-muted-foreground mb-4">
+                          {products.yearly.trialDays}-day free trial
+                        </div>
+                        <button
+                          onClick={() => handleSubscribe(products.yearly.id)}
+                          className="w-full px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors"
+                        >
+                          Subscribe Yearly
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    className="mt-6 px-6 py-3 bg-gray-700 text-white rounded-md hover:bg-gray-600 text-lg font-semibold"
+                    onClick={finishAndGoToGoals}
+                  >
+                    I'm good for now
+                  </button>
                 </div>
               )}
             </div>
@@ -166,14 +208,16 @@ const Onboarding: React.FC = () => {
                 {String(currentStep) === 'animation' ? 'Skip' : 'Back'}
               </button>
 
-              <button
-                onClick={nextStep}
-                className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors flex items-center gap-2"
-                disabled={ONBOARDING_FLOW.indexOf(String(currentStep)) === -1}
-              >
-                {String(currentStep) === 'subscription' ? 'Finish' : 'Next'}
-                <span className="text-xl">→</span>
-              </button>
+              {String(currentStep) !== 'subscription' && (
+                <button
+                  onClick={nextStep}
+                  className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 transition-colors flex items-center gap-2"
+                  disabled={ONBOARDING_FLOW.indexOf(String(currentStep)) === -1}
+                >
+                  Next
+                  <span className="text-xl">→</span>
+                </button>
+              )}
             </div>
           </div>
         </motion.div>

@@ -1,11 +1,22 @@
-import { app, BrowserWindow, ipcMain, Tray, nativeImage, Notification, Menu, screen } from 'electron';
+import { app, BrowserWindow, ipcMain, Tray, nativeImage, Notification, Menu, screen, protocol, session } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 
+// Handle self-signed certificates in development
+if (process.env.NODE_ENV === 'development' || (process.env.REACT_APP_API_URL || "").includes('localhost')) {
+  app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
+    // Only allow localhost certificates
+    if (url.startsWith('https://localhost:')) {
+      event.preventDefault();
+      callback(true);
+    } else {
+      callback(false);
+    }
+  });
+}
+
 // Better isDev detection that works in production builds
-const isDev = process.env.ELECTRON_IS_DEV === '1' || 
-              !(app && app.isPackaged) || 
-              process.env.NODE_ENV === 'development';
+const isDev = (process.env.REACT_APP_API_URL || "").includes('localhost')
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -226,6 +237,9 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
+      // Allow self-signed certificates in development
+      webSecurity: !isDev,
+      allowRunningInsecureContent: isDev
     },
     // titleBarStyle: 'hiddenInset', // For macOS style
     icon: path.join(__dirname, '../public/logo512.png'),
@@ -466,6 +480,9 @@ function createMenuBarWidget() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
+      // Allow self-signed certificates in development
+      webSecurity: !isDev,
+      allowRunningInsecureContent: isDev
     },
   });
 
@@ -1151,6 +1168,15 @@ function checkTrayStatusAfterStartup() {
 
 // Handle app ready
 app.whenReady().then(async () => {
+  if (process.env.NODE_ENV === 'development') {
+    session.defaultSession.setCertificateVerifyProc((request, callback) => {
+      if (request.hostname === 'localhost') {
+        callback(0); // 0 = OK
+      } else {
+        callback(-3); // -3 = use default verification
+      }
+    });
+  }
   // First set up logging to capture all events
   setupLogging();
   logToFile('App ready event fired');

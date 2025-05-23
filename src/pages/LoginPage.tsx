@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { Icon } from '@iconify/react';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || '';
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -9,6 +12,9 @@ const LoginPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const errorFromQuery = params.get('error');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,9 +42,9 @@ const LoginPage: React.FC = () => {
           <h2 className="text-xl text-gray-300 mt-2">Sign in to your account</h2>
         </div>
 
-        {error && (
+        {(error || errorFromQuery) && (
           <div className="bg-red-900 text-white p-3 rounded-md mb-4">
-            {error}
+            {error || errorFromQuery}
           </div>
         )}
 
@@ -80,9 +86,35 @@ const LoginPage: React.FC = () => {
           </button>
         </form>
 
+        {/* Social login buttons */}
+        <div className="mt-6 flex flex-row gap-4 justify-center">
+          <button
+            className="flex items-center justify-center bg-white text-black p-3 rounded-full hover:bg-gray-100 border border-gray-300"
+            onClick={() => window.location.href = `${API_BASE_URL}/auth/google`}
+            aria-label="Sign in with Google"
+          >
+            <Icon icon="flat-color-icons:google" className="h-6 w-6" />
+          </button>
+          <button
+            className="flex items-center justify-center bg-[#1877f2] text-white p-3 rounded-full hover:bg-[#145db2] border border-[#1877f2]"
+            onClick={() => window.location.href = `${API_BASE_URL}/auth/facebook`}
+            aria-label="Sign in with Facebook"
+          >
+            <Icon icon="logos:facebook" className="h-6 w-6" />
+          </button>
+          <button
+            className="flex items-center justify-center bg-black text-white p-3 rounded-full hover:bg-gray-900 border border-black"
+            onClick={() => window.location.href = `${API_BASE_URL}/auth/apple`}
+            aria-label="Sign in with Apple"
+          >
+            <Icon icon="logos:apple" className="h-6 w-6" />
+          </button>
+        </div>
+
         <div className="mt-6 text-center">
           <p className="text-gray-400">
-            Don't have an account? Contact an administrator for an invitation.
+            Don't have an account?{' '}
+            <Link to="/register" className="text-primary hover:underline">Sign up</Link>
           </p>
         </div>
       </div>

@@ -17,6 +17,12 @@ export interface IUserData extends Document {
   };
   createdAt: Date;
   updatedAt: Date;
+  isSubscribed: boolean;
+  subscriptionType: 'yearly' | 'monthly' | null;
+  subscriptionEnd: Date | null;
+  stripeCustomerId: string | null;
+  stripeSubscriptionId: string | null;
+  activeProductId: string | null;
 }
 
 // Emotion Schema
@@ -107,7 +113,13 @@ const UserDataSchema = new Schema<IUserData>(
     goals: [GoalSchema],
     initiatives: [InitiativeSchema],
     checkIns: [CheckInSchema],
-    settings: SettingsSchema
+    settings: SettingsSchema,
+    isSubscribed: { type: Boolean, default: false },
+    subscriptionType: { type: String, enum: ['yearly', 'monthly', null], default: null },
+    subscriptionEnd: { type: Date, default: null },
+    stripeCustomerId: { type: String, default: null },
+    stripeSubscriptionId: { type: String, default: null },
+    activeProductId: { type: String, default: null }
   },
   {
     timestamps: true
