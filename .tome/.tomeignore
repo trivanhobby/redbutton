@@ -1,0 +1,34 @@
+# Tome ignore patterns
+# Files and folders matching these patterns are hidden from the editor.
+# Uses gitignore syntax. Edit to customize.
+
+# Version control
+.git/
+.svn/
+.hg/
+
+# Security-sensitive folders
+.ssh/
+.gnupg/
+.aws/
+.docker/
+.kube/
+.npm/
+
+# Build outputs and dependencies
+node_modules/
+dist/
+build/
+.next/
+__pycache__/
+.cache/
+vendor/
+.venv/
+coverage/
+.nyc_output/
+.turbo/
+
+# System and editor files
+.DS_Store
+*.log
+.env*
